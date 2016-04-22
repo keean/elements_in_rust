@@ -1,3 +1,5 @@
+#![feature(specialization)]
+
 pub mod elements {
 
     extern crate num;
@@ -8,11 +10,15 @@ pub mod elements {
     //-----------------------------------------------------------------------------
     // 1.5 Regular Types
 
+    // Regular types enable normal value semantics, except we require explicit
+    // cloning rather than copying so the cost is visible in the code.
     pub trait Regular : PartialEq + Clone {}
 
     //-----------------------------------------------------------------------------
     // 2.1 Integers
 
+    // This is an incomplete implementation of the Integer concept with just the 
+    // functions necessary for the iterator algorithms below.
     pub trait Integer : num::Integer {
         fn two() -> Self where Self : NumCast {
             Self::from(2).unwrap()
@@ -32,19 +38,40 @@ pub mod elements {
     //-----------------------------------------------------------------------------
     // 6.1 Readability
 
+    // Readability is roughly equivalent to a read-only reference in Rust, but also
+    // represents read-only access to containers. Ideally this is a read-only
+    // version of Rusts 'Deref' trait, but we would like a value to derefence to
+    // itself.
     pub trait Readable {
         type value_type : Regular;
         fn source(&self) -> &Self::value_type;
     }
 
+    // If a type does not have a specific definition of Readable, we use the
+    // identity function. Unfortunately I cannot implement this without it 
+    // overlapping other definitions, preventing the associated type from 
+    // working.
+
+    //impl<T> Readable for T where T : Regular {
+    //    default type value_type = T;
+    //    default fn source(&self) -> &Self::value_type {
+    //        self
+    //    }
+    //}
+
     //-----------------------------------------------------------------------------
     // 6.2 Iterators
 
+    // A plain Iterator is one which can only pass through the data once. To
+    // enforce this it must not be copyable, and successor needs to consume the
+    // current iterator to return a new one. 
     pub trait IteratorImpl : PartialEq {
         type distance_type_impl : Integer;
         fn increment_impl(&mut self);
     }       
 
+    // Note: We need a wrapper for iterators, so that we can define addition and
+    // subtraction using the normal operators.
     #[derive(Clone, PartialEq, Debug)]
     pub struct It<I>(pub I) where I : PartialEq;
 
@@ -227,6 +254,10 @@ pub mod elements {
         (f0, f1)
     }
 
+    // Note: this algorithm needs to clone the data as the iterator is a single pass 
+    // iterator. That means you cannot hold a reference to the location pointed to by
+    // 'f' once 'f' has been incremented. To do so would effectively allow the iterator
+    // to be copied, which would break the invarient conditions. 
     pub fn find_adjacent_mismatch<I, R>(mut f : I, l : &I, mut r : R) -> I
     where I : Iterator + Readable, R : FnMut(&I::value_type, &I::value_type) -> bool {
         if f != *l {
@@ -297,15 +328,15 @@ mod test {
         }
     }
 
-    impl<T : Display> Display for SliceIterator<T> {
+    impl<T> Display for SliceIterator<T> where T : Display {
         fn fmt(&self, f : &mut Formatter) -> Result {
             write!(f, "{}", self.ptr as usize)
         }
     }
 
-    impl<T : Regular> Regular for SliceIterator<T> {}
+    impl<T> Regular for SliceIterator<T> where T : Regular {}
 
-    impl<T : Regular> Readable for SliceIterator<T> {
+    impl<T> Readable for SliceIterator<T> where T : Regular {
         type value_type = T;
         fn source(&self) -> &T {
             let v : &T;
@@ -316,7 +347,7 @@ mod test {
         }
     }
 
-    impl<T> IteratorImpl for SliceIterator<T> where T : PartialEq {
+    impl <T> IteratorImpl for SliceIterator<T> where T : PartialEq {
         type distance_type_impl = usize;
         fn increment_impl(&mut self) {
             unsafe {
