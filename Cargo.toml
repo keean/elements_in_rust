@@ -1,0 +1,21 @@
+[package]
+name = "elements_in_rust"
+version = "0.1.0"
+authors = ["Keean Schupke <keean@fry-it.com>"]
+[dependencies]
+num = "*"
+[profile.dev]
+opt-level = 3
+debug = true
+debug-assertions = true
+lto = true
+[profile.test]
+opt-level = 3
+debug = true
+debug-assertions = true
+lto = true
+[profile.release]
+opt-level = 3
+debug = true
+debug-assertions = true
+lto = true
