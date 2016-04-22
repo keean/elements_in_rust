@@ -100,7 +100,7 @@ pub mod elements {
     //-----------------------------------------------------------------------------
     // 6.4 Readable Ranges
 
-    pub fn for_each<'a, I, P>(mut f : I, l : &I, mut p : P) -> P
+    pub fn for_each<I, P>(mut f : I, l : &I, mut p : P) -> P
     where I : Iterator + Readable, P : FnMut(&I::value_type) {
         while f != *l {
             p(f.source());
@@ -190,7 +190,7 @@ pub mod elements {
         x
     }
 
-    pub fn for_each_n<'a, I, P>(mut f : I, mut n : I::distance_type, mut p : P) -> (P, I)
+    pub fn for_each_n<I, P>(mut f : I, mut n : I::distance_type, mut p : P) -> (P, I)
     where I : Iterator + Readable, P : FnMut(&I::value_type) {
         while I::distance_type::zero() != n {
             n = n.predecessor();
