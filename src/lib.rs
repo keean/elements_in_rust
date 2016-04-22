@@ -104,6 +104,7 @@ pub mod elements {
     impl<I> Add<I::distance_type_impl> for It<I> where I : IteratorImpl {
         type Output = Self;
         fn add(mut self, mut n : I::distance_type_impl) -> Self {
+            // Precondition: n >= 0 && weak_range(f, n)
             while n != I::distance_type_impl::zero() {
                 n = n.predecessor();
                 self = self.successor();
@@ -115,6 +116,7 @@ pub mod elements {
     impl<I> Sub<It<I>> for It<I> where I : IteratorImpl {
         type Output = I::distance_type_impl;
         fn sub(self, mut f : Self) -> Self::Output {
+            // Precondition: bounded_range(f, l)
             let mut n = I::distance_type_impl::zero();
             while f != self {  
                 n = n.successor();
@@ -129,6 +131,7 @@ pub mod elements {
 
     pub fn for_each<I, P>(mut f : I, l : &I, mut p : P) -> P
     where I : Iterator + Readable, P : FnMut(&I::value_type) {
+        // Precondition: readable_bounded_range(f, l)
         while f != *l {
             p(f.source());
             f = f.successor();
@@ -138,6 +141,7 @@ pub mod elements {
 
     pub fn find<I>(mut f : I, l : &I, x : I::value_type) -> I
     where I : Iterator + Readable {
+        // Precondition: readable_bounded_range(f, l)
         while (f != *l) && (*(f.source()) != x) {
             f = f.successor();
         }
@@ -146,6 +150,7 @@ pub mod elements {
     
     pub fn find_if<I, P>(mut f : I, l : &I, mut p : P) -> I
     where I : Iterator + Readable, P : FnMut(&I::value_type) -> bool {
+        // Precondition: readable_bounded_range(f, l)
         while (f != *l) && !p(f.source()) {
             f = f.successor();
         }
@@ -154,6 +159,7 @@ pub mod elements {
 
     pub fn find_if_not<I, P>(mut f : I, l : &I, mut p : P) -> I
     where I : Iterator + Readable, P : FnMut(&I::value_type) -> bool {
+        // Precondition: readable_bounded_range(f, l)
         while (f != *l) && p(f.source()) {
             f = f.successor();
         }
@@ -162,6 +168,7 @@ pub mod elements {
 
     pub fn count_if<I, J, P>(mut f : I, l : &I, mut p : P, mut j : J) -> J
     where I : Iterator + Readable, J : Integer, P : FnMut(&I::value_type) -> bool {
+        // Precondition: readable_bounded_range(f, l)
         while f != *l {
             if p(f.source()) {
                 j = j.successor();
@@ -173,11 +180,15 @@ pub mod elements {
 
     pub fn count_if_from_zero<I, P>(f : I, l : &I, p : P) -> I::distance_type
     where I : Iterator + Readable, P : FnMut(&I::value_type) -> bool {
+        // Precondition: readable_bounded_range(f, l)
         count_if(f, l, p, I::distance_type::zero())
     }
 
     pub fn reduce_nonempty<I, Op, F, D>(mut f : I, l : &I, mut op : Op, mut fun : F) -> D 
     where I : Iterator + Readable, Op : FnMut(D, D) -> D, F : FnMut(&I) -> D {
+        // Precondition: readable_bounded_range(f, l)
+        // Precondition: partially_associative(op)
+        // Precondition: forall x in [f,l) fun(x) is defined 
         let mut r = fun(&f);
         f = f.successor();
         while f != *l {
@@ -189,6 +200,9 @@ pub mod elements {
 
     pub fn reduce<I, Op, F, D>(f : I, l : &I, op : Op, fun : F, z : D) -> D
     where D : Regular, I : Iterator + Readable, Op : FnMut(D, D) -> D, F : FnMut(&I) -> D {
+        // Precondition: readable_bounded_range(f, l)
+        // Precondition: partially_associative(op)
+        // Precondition: forall x in [f,l) fun(x) is defined 
         if f == *l {
             z
         } else {
@@ -198,6 +212,9 @@ pub mod elements {
 
     pub fn reduce_nonzeroes<I, Op, F, D>(mut f : I, l : &I, mut op : Op, mut fun : F, z : D) -> D 
     where D : Regular, I : Iterator + Readable, Op : FnMut(D, D) -> D, F : FnMut(&I) -> D {
+        // Precondition: readable_bounded_range(f, l)
+        // Precondition: partially_associative(op)
+        // Precondition: forall x in [f,l) fun(x) is defined 
         let mut x : D;
         while {
             if f == *l {
@@ -219,6 +236,7 @@ pub mod elements {
 
     pub fn for_each_n<I, P>(mut f : I, mut n : I::distance_type, mut p : P) -> (P, I)
     where I : Iterator + Readable, P : FnMut(&I::value_type) {
+        // Precondition: readable_weak_range(f, n)
         while I::distance_type::zero() != n {
             n = n.predecessor();
             p(f.source());
@@ -229,6 +247,7 @@ pub mod elements {
 
     pub fn find_n<I>(mut f : I, mut n : I::distance_type, x : I::value_type) -> (I, I::distance_type)
     where I : Iterator + Readable {
+        // Precondition: weak_range(f, n)
         while n != I::distance_type::zero() && *(f.source()) != x {
             n = n.predecessor();
             f = f.successor();
@@ -238,15 +257,19 @@ pub mod elements {
 
     pub fn find_if_unguarded<I, P>(mut f : I, mut p : P) -> I
     where I : Iterator + Readable, P : FnMut(&I::value_type) -> bool {
+        // Precondition: exists l . readable_bounded_range(f, l) && some(f, j, p)
         while !p(f.source()) {
             f = f.successor();
         }
         f
+        // Postcondition: p(f.source())
     }
 
     pub fn find_mismatch<I0, I1, R, V>(mut f0 : I0, l0 : &I0, mut f1 : I1, l1 : &I1, mut r : R) -> (I0, I1)
     where I0 : Iterator + Readable<value_type = V>, I1 : Iterator + Readable<value_type = V>,
     R : FnMut(&V, &V) -> bool, V : Regular {
+        // Precondition: readable_bounded_range(f0, l0)
+        // Precondition: readable_bounded_range(f1, l1)
         while f0 != *l0 && f1 != *l1 && r(f0.source(), f1.source()) {
             f0 = f0.successor();
             f1 = f1.successor();
@@ -260,6 +283,7 @@ pub mod elements {
     // to be copied, which would break the invarient conditions. 
     pub fn find_adjacent_mismatch<I, R>(mut f : I, l : &I, mut r : R) -> I
     where I : Iterator + Readable, R : FnMut(&I::value_type, &I::value_type) -> bool {
+        // Precondition: readable_bounded_range(f, l)
         if f != *l {
             let mut x : I::value_type = (*f.source()).clone();
             f = f.successor();
@@ -276,11 +300,13 @@ pub mod elements {
 
     pub fn relation_preserving<I, R>(f : I, l : &I, r : R) -> bool
     where I : Iterator + Readable, R : FnMut(&I::value_type, &I::value_type) -> bool {
+        // Precondition: readable_bounded_range(f, l)
         *l == find_adjacent_mismatch(f, l, r)
     }
 
     pub fn strictly_increasing_range<I, R>(f : I, l : &I, r : R) -> bool
     where I : Iterator + Readable, R : FnMut(&I::value_type, &I::value_type) -> bool {
+        // Precondition: readable_bounded_range(f, l) && weak_ordering(r)
         relation_preserving(f, l, r)
     }
 
@@ -291,11 +317,13 @@ pub mod elements {
 
     pub fn increasing_range<I, R>(f : I, l : &I, r : R) -> bool
     where I : Iterator + Readable, R : FnMut(&I::value_type, &I::value_type) -> bool + Sized {
+        // Precondition: readable_bounded_range(f, l) && weak_ordering(r)
         relation_preserving(f, l, &mut *complement_of_converse(r))
     }
 
     pub fn partitioned<I, P>(f : I, l : &I, mut p : P) -> bool
     where I : Iterator + Readable, P : FnMut(&I::value_type) -> bool {
+        // Precondition: readable_bounded_range(f, l)
         let g = find_if(f, l, &mut p);
         *l == find_if_not(g, l, p)
     }
