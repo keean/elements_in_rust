@@ -329,6 +329,9 @@ pub mod elements {
     //-----------------------------------------------------------------------------
     // 6.6 Forward Iterators
 
+    // A Forward Iterator is an Iterator that is also a Regular type, this means it
+    // must behave like a value, and be copyable, assignable (storable) in addition
+    // to having an equality operator.
     pub trait ForwardIterator : Iterator + Regular {}
 
     impl<I> ForwardIterator for It<I> where It<I> : Iterator + Regular {}
