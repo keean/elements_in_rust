@@ -1,5 +1,3 @@
-#![feature(specialization)]
-
 pub mod elements {
 
     extern crate num;
@@ -13,6 +11,9 @@ pub mod elements {
     // Regular types enable normal value semantics, except we require explicit
     // cloning rather than copying so the cost is visible in the code.
     pub trait Regular : PartialEq + Clone {}
+
+    // A type is regular is it has equality, assigment and clonable.
+    impl<I> Regular for I where I : PartialEq + Clone {}
 
     //-----------------------------------------------------------------------------
     // 2.1 Integers
@@ -31,9 +32,7 @@ pub mod elements {
         }
     }
 
-    impl<I> Regular for I where I : num::Integer + Clone {}
-
-    impl<I> Integer for I where I : num::Integer + Clone {}
+    impl<I> Integer for I where I : num::Integer {}
 
     //-----------------------------------------------------------------------------
     // 6.1 Readability
@@ -46,18 +45,6 @@ pub mod elements {
         type value_type : Regular;
         fn source(&self) -> &Self::value_type;
     }
-
-    // If a type does not have a specific definition of Readable, we use the
-    // identity function. Unfortunately I cannot implement this without it 
-    // overlapping other definitions, preventing the associated type from 
-    // working.
-
-    //impl<T> Readable for T where T : Regular {
-    //    default type value_type = T;
-    //    default fn source(&self) -> &Self::value_type {
-    //        self
-    //    }
-    //}
 
     //-----------------------------------------------------------------------------
     // 6.2 Iterators
@@ -73,7 +60,7 @@ pub mod elements {
     // Note: We need a wrapper for iterators, so that we can define addition and
     // subtraction using the normal operators.
     #[derive(Clone, PartialEq, Debug)]
-    pub struct It<I>(pub I) where I : PartialEq;
+    pub struct It<I>(pub I);
 
     pub trait Iterator : PartialEq {
         type distance_type : Integer;
@@ -84,7 +71,7 @@ pub mod elements {
         }
     }       
 
-    impl<I> Readable for It<I> where I : Readable + PartialEq {
+    impl<I> Readable for It<I> where I : Readable {
         type value_type = I::value_type;
         fn source(&self) -> &Self::value_type {
             self.0.source()
@@ -182,6 +169,17 @@ pub mod elements {
     where I : Iterator + Readable, P : FnMut(&I::value_type) -> bool {
         // Precondition: readable_bounded_range(f, l)
         count_if(f, l, p, I::distance_type::zero())
+    }
+
+    pub fn fold<I, Op>(mut f : I, l : &I, mut op : Op, mut r : I::value_type) -> I::value_type
+    where I : Iterator + Readable, Op : FnMut(&I::value_type, &I::value_type) -> I::value_type {
+        // Precondition: readable_bounded_range(f, l)
+        // Precondition: partially_associative(op) 
+        while f != *l {
+            r = op(&r, f.source());
+            f = f.successor();
+        }
+        r
     }
 
     pub fn reduce_nonempty<I, Op, F, D>(mut f : I, l : &I, mut op : Op, mut fun : F) -> D 
@@ -327,6 +325,30 @@ pub mod elements {
         let g = find_if(f, l, &mut p);
         *l == find_if_not(g, l, p)
     }
+
+    //-----------------------------------------------------------------------------
+    // 6.6 Forward Iterators
+
+    pub trait ForwardIterator : Iterator + Regular {}
+
+    impl<I> ForwardIterator for It<I> where It<I> : Iterator + Regular {}
+
+    // Because a forward iterator is copyable we cam clone the iterator instead
+    // of having to clone the data.
+    pub fn find_adjacent_mismatch_forward<I, R>(mut f : I, l : &I, mut r : R) -> I
+    where I : ForwardIterator + Readable, R : FnMut(&I::value_type, &I::value_type) -> bool {
+        // Precondition: readable_bounded_range(f, l)
+        if f == *l {
+            return f; // return f not l because we own it
+        }
+        let mut t : I;
+        while {
+            t = f.clone();
+            f = f.successor();
+            f != *l && r(t.source(), f.source())
+        } {} // would loop/break be better?
+        f
+    }
 }
 
 //=============================================================================
@@ -348,7 +370,7 @@ mod test {
         ptr : *mut T
     } 
 
-    impl<T> SliceIterator<T> where T : PartialEq {
+    impl<T> SliceIterator<T> {
         fn new(r : &mut T) -> It<SliceIterator<T>> {
             It(SliceIterator {
                 ptr : r as *mut T
@@ -361,8 +383,6 @@ mod test {
             write!(f, "{}", self.ptr as usize)
         }
     }
-
-    impl<T> Regular for SliceIterator<T> where T : Regular {}
 
     impl<T> Readable for SliceIterator<T> where T : Regular {
         type value_type = T;
@@ -516,6 +536,12 @@ mod test {
         assert!(b);
     }
 
+    fn test_find_adjacent_mismatch_forward<I>(f : I, l : &I, m : &I)
+    where I : Readable + ForwardIterator, I::value_type : Debug {
+        let i = find_adjacent_mismatch_forward(f, l, |a, b| a == b);
+        assert!(i.source() != (*m).source());
+    }
+
     #[test]
     fn test_iterators() {
         let mut v = [0, 1, 2, 3];
@@ -546,6 +572,7 @@ mod test {
         test_complement_of_converse();
         test_increasing_range(f.clone(), &l);
         test_partitioned(f.clone(), &l, 2);
+        test_find_adjacent_mismatch_forward(f.clone(), &l, &f);
     }
 }
 
