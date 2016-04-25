@@ -12,7 +12,7 @@ pub mod elements {
     // cloning rather than copying so the cost is visible in the code.
     pub trait Regular : PartialEq + Clone {}
 
-    // A type is regular is it has equality, assigment and clonable.
+    // A type is regular if it has assignment, equality, and is clonable.
     impl<I> Regular for I where I : PartialEq + Clone {}
 
     //-----------------------------------------------------------------------------
