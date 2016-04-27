@@ -60,7 +60,10 @@ pub mod elements {
 
     // A plain Iterator is one which can only pass through the data once. To
     // enforce this it must not be copyable, and successor needs to consume the
-    // current iterator to return a new one. 
+    // current iterator to return a new one. This means that we define increment
+    // which mutates the iterator instead of successor, as we can then implement
+    // successor without copying the iterator or moving it out of the borrowed
+    // context.
     pub trait IteratorImpl : PartialEq {
         type distance_type_impl : Integer;
         fn increment_impl(&mut self);
@@ -72,7 +75,10 @@ pub mod elements {
     pub struct It<I>(pub I);
 
     pub trait Iterator : PartialEq
-    where Self : Sized + Add<<Self as Iterator>::distance_type, Output = Self> {
+    where Self : Sized
+        + Add<<Self as Iterator>::distance_type, Output = Self>
+        + Sub<Self, Output = <Self as Iterator>::distance_type>
+    {
         type distance_type : Integer;
         fn increment(&mut self);
         fn successor(mut self) -> Self where Self : Sized {
@@ -379,6 +385,12 @@ pub mod elements {
         }
         f
     }
+
+    pub fn partition_point<I, P>(f : I, l : I, p : P) -> I
+    where I : ForwardIterator + Readable, P : FnMut(&I::value_type) -> bool {
+        // Precondition: readable_bounded_range(f, n) && partitioned(f, l, p)
+        partition_point_n(f.clone(), l - f, p)
+    }
 }
 
 //=============================================================================
@@ -572,6 +584,13 @@ mod test {
         assert!(i.source() != (*m).source());
     }
 
+    fn test_partition_point<I>(f : I, l : &I, p : I::value_type, q : I::distance_type)
+    where I : Readable + ForwardIterator, I::value_type : Debug,
+    I::distance_type : PartialEq + Display {
+        let i = partition_point(f.clone(), l.clone(), |a : &I::value_type| a == &p);
+        assert!(l.clone() - i == q);
+    }
+
     #[test]
     fn test_iterators() {
         let mut v = [0, 1, 2, 3];
@@ -603,6 +622,7 @@ mod test {
         test_increasing_range(f.clone(), &l);
         test_partitioned(f.clone(), &l, 2);
         test_find_adjacent_mismatch_forward(f.clone(), &l, &f);
+        test_partition_point(f.clone(), &l, 2, 2);
     }
 }
 
