@@ -2,7 +2,7 @@ pub mod elements {
 
     extern crate num;
 
-    use std::ops::{Add, Sub};
+    use std::ops::{Add, Sub, Shr};
     use self::num::{Zero, One, NumCast};
 
     //-----------------------------------------------------------------------------
@@ -20,19 +20,28 @@ pub mod elements {
 
     // This is an incomplete implementation of the Integer concept with just the 
     // functions necessary for the iterator algorithms below.
-    pub trait Integer : num::Integer {
+    pub trait Integer : num::Integer 
+    where Self : Regular + Shr<Self, Output = Self> 
+    {
         fn two() -> Self where Self : NumCast {
             Self::from(2).unwrap()
         }
-        fn successor(self) -> Self where Self : Add<Output = Self> + One + Sized {
+        fn is_two(&self) -> bool where Self : NumCast + PartialEq {
+            *self == Self::from(2).unwrap()
+        }
+        fn successor(self) -> Self where Self : Sized {
             self + Self::one()
         }
-        fn predecessor(self) -> Self where Self : Sub<Output = Self> + One + Sized {
+        fn predecessor(self) -> Self where Self : Sized {
             self - Self::one()
+        }
+        fn half_nonnegative(self) -> Self where Self : Sized {
+            self >> Self::one()
         }
     }
 
-    impl<I> Integer for I where I : num::Integer {}
+    impl<I> Integer for I
+    where I : num::Integer + Regular + Shr<I, Output = I> {}
 
     //-----------------------------------------------------------------------------
     // 6.1 Readability
@@ -62,7 +71,8 @@ pub mod elements {
     #[derive(Clone, PartialEq, Debug)]
     pub struct It<I>(pub I);
 
-    pub trait Iterator : PartialEq {
+    pub trait Iterator : PartialEq
+    where Self : Sized + Add<<Self as Iterator>::distance_type, Output = Self> {
         type distance_type : Integer;
         fn increment(&mut self);
         fn successor(mut self) -> Self where Self : Sized {
@@ -78,7 +88,8 @@ pub mod elements {
         }
     }
 
-    impl<I> Iterator for It<I> where I : IteratorImpl {
+    impl<I> Iterator for It<I>
+    where I : IteratorImpl {
         type distance_type = I::distance_type_impl;
         fn increment(&mut self) {
             self.0.increment_impl();
@@ -350,6 +361,22 @@ pub mod elements {
             f = f.successor();
             f != *l && r(t.source(), f.source())
         } {} // would loop/break be better?
+        f
+    }
+
+    pub fn partition_point_n<I, P>(mut f : I, mut n : I::distance_type, mut p : P) -> I
+    where I : ForwardIterator + Readable, P : FnMut(&I::value_type) -> bool {
+        // Precondition: readable_counted_range(f, n) && partitioned_n(f, n, p)
+        while !n.is_zero() {
+            let h : I::distance_type = n.clone().half_nonnegative();
+            let m : I = f.clone() + h.clone();
+            if p(m.source()) {
+                n = h;
+            } else {
+                n = n - h.successor();
+                f = m.successor();
+            }
+        }
         f
     }
 }
