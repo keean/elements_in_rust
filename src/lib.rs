@@ -1,3 +1,5 @@
+#![feature(unboxed_closures)]
+
 pub mod elements {
 
     extern crate num;
@@ -370,6 +372,7 @@ pub mod elements {
         f
     }
 
+    //pub fn partition_point_n<I, P>(mut f : I, mut n : I::distance_type, mut p : P) -> I
     pub fn partition_point_n<I, P>(mut f : I, mut n : I::distance_type, mut p : P) -> I
     where I : ForwardIterator + Readable, P : FnMut(&I::value_type) -> bool {
         // Precondition: readable_counted_range(f, n) && partitioned_n(f, n, p)
@@ -391,6 +394,17 @@ pub mod elements {
         // Precondition: readable_bounded_range(f, n) && partitioned(f, l, p)
         partition_point_n(f.clone(), l - f, p)
     }
+
+    pub fn lower_bound_predicate<'a, R, D>(a : &'a D, mut r : R) -> Box<FnMut(&D) -> bool + 'a>
+    where R : FnMut(&D, &D) -> bool + 'a {
+        Box::new(move |x| !r(x, a))
+    }
+
+    pub fn lower_bound_n<I, R>(f : I, n : I::distance_type, a : &I::value_type, r : R) -> I
+    where I : Readable + ForwardIterator, R : FnMut(&I::value_type, &I::value_type) -> bool {
+        partition_point_n(f, n, &mut *lower_bound_predicate(a, r))
+    }
+
 }
 
 //=============================================================================
