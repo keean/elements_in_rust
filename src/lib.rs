@@ -402,9 +402,20 @@ pub mod elements {
 
     pub fn lower_bound_n<I, R>(f : I, n : I::distance_type, a : &I::value_type, r : R) -> I
     where I : Readable + ForwardIterator, R : FnMut(&I::value_type, &I::value_type) -> bool {
+        // Precondition: weak_ordering(r) && increasing_counted_range(f, n, r)
         partition_point_n(f, n, &mut *lower_bound_predicate(a, r))
     }
 
+    pub fn upper_bound_predicate<'a, R, D>(a : &'a D, mut r : R) -> Box<FnMut(&D) -> bool + 'a>
+    where R : FnMut(&D, &D) -> bool + 'a {
+        Box::new(move |x| r(a, x))
+    }
+
+    pub fn upper_bound_n<I, R>(f : I, n : I::distance_type, a : &I::value_type, r : R) -> I
+    where I : Readable + ForwardIterator, R : FnMut(&I::value_type, &I::value_type) -> bool {
+        // Precondition: weak_ordering(r) && increasing_counted_range(f, n, r)
+        partition_point_n(f, n, &mut *upper_bound_predicate(a, r))
+    }
 }
 
 //=============================================================================
