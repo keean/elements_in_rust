@@ -67,7 +67,7 @@ pub mod elements {
     // successor without copying the iterator or moving it out of the borrowed
     // context.
     pub trait IteratorImpl : PartialEq {
-        type DistanceType_impl : Integer;
+        type DistanceTypeImpl : Integer;
         fn increment_impl(&mut self);
     }       
 
@@ -98,7 +98,7 @@ pub mod elements {
 
     impl<I> Iterator for It<I>
     where I : IteratorImpl {
-        type DistanceType = I::DistanceType_impl;
+        type DistanceType = I::DistanceTypeImpl;
         fn increment(&mut self) {
             self.0.increment_impl();
         }
@@ -107,11 +107,11 @@ pub mod elements {
     //-----------------------------------------------------------------------------
     // 6.3 Ranges
 
-    impl<I> Add<I::DistanceType_impl> for It<I> where I : IteratorImpl {
+    impl<I> Add<I::DistanceTypeImpl> for It<I> where I : IteratorImpl {
         type Output = Self;
-        fn add(mut self, mut n : I::DistanceType_impl) -> Self {
+        fn add(mut self, mut n : I::DistanceTypeImpl) -> Self {
             // Precondition: n >= 0 && weak_range(f, n)
-            while n != I::DistanceType_impl::zero() {
+            while n != I::DistanceTypeImpl::zero() {
                 n = n.predecessor();
                 self = self.successor();
             }
@@ -120,10 +120,10 @@ pub mod elements {
     }
 
     impl<I> Sub<It<I>> for It<I> where I : IteratorImpl {
-        type Output = I::DistanceType_impl;
+        type Output = I::DistanceTypeImpl;
         fn sub(self, mut f : Self) -> Self::Output {
             // Precondition: bounded_range(f, l)
-            let mut n = I::DistanceType_impl::zero();
+            let mut n = I::DistanceTypeImpl::zero();
             while f != self {  
                 n = n.successor();
                 f = f.successor();
@@ -416,6 +416,21 @@ pub mod elements {
         // Precondition: weak_ordering(r) && increasing_counted_range(f, n, r)
         partition_point_n(f, n, &mut *upper_bound_predicate(a, r))
     }
+
+    //-----------------------------------------------------------------------------
+    // 6.7 Indexed Iterators
+
+    pub trait IndexedIterator : ForwardIterator {
+        fn add(self, Self::DistanceType) -> Self;
+        fn sub(self, Self) -> Self::DistanceType;
+    }
+
+    //-----------------------------------------------------------------------------
+    // 6.7 Indexed Iterators
+
+    pub trait BidirectionalIterator : ForwardIterator {
+        fn predecessor(self) -> Self;
+    }
 }
 
 //=============================================================================
@@ -463,7 +478,7 @@ mod test {
     }
 
     impl <T> IteratorImpl for SliceIterator<T> where T : PartialEq {
-        type DistanceType_impl = usize;
+        type DistanceTypeImpl = usize;
         fn increment_impl(&mut self) {
             unsafe {
                 self.ptr = self.ptr.offset(1);
