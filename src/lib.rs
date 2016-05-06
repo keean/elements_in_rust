@@ -1,10 +1,8 @@
-#![feature(unboxed_closures)]
-
 pub mod elements {
 
     extern crate num;
 
-    use std::ops::{Add, Sub, Shr};
+    use std::ops::{Shr};
     use self::num::{Zero, One, NumCast};
 
     //-----------------------------------------------------------------------------
@@ -22,7 +20,7 @@ pub mod elements {
 
     // This is an incomplete implementation of the Integer concept with just the 
     // functions necessary for the iterator algorithms below.
-    pub trait Integer : num::Integer 
+    pub trait Integer : num::Integer + NumCast
     where Self : Regular + Shr<Self, Output = Self> 
     {
         fn two() -> Self where Self : NumCast {
@@ -43,7 +41,7 @@ pub mod elements {
     }
 
     impl<I> Integer for I
-    where I : num::Integer + Regular + Shr<I, Output = I> {}
+    where I : num::Integer + Regular + Shr<I, Output = I> + NumCast {}
 
     //-----------------------------------------------------------------------------
     // 6.1 Readability
@@ -66,71 +64,36 @@ pub mod elements {
     // which mutates the iterator instead of successor, as we can then implement
     // successor without copying the iterator or moving it out of the borrowed
     // context.
-    pub trait IteratorImpl : PartialEq {
-        type DistanceTypeImpl : Integer;
-        fn increment_impl(&mut self);
-    }       
-
-    // Note: We need a wrapper for iterators, so that we can define addition and
-    // subtraction using the normal operators.
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct It<I>(pub I);
-
-    pub trait Iterator : PartialEq
-    where Self : Sized
-        + Add<<Self as Iterator>::DistanceType, Output = Self>
-        + Sub<Self, Output = <Self as Iterator>::DistanceType>
-    {
+    pub trait Iterator : PartialEq {
         type DistanceType : Integer;
         fn increment(&mut self);
+
         fn successor(mut self) -> Self where Self : Sized {
             self.increment();
             self
         }
-    }       
 
-    impl<I> Readable for It<I> where I : Readable {
-        type ValueType = I::ValueType;
-        fn source(&self) -> &Self::ValueType {
-            self.0.source()
-        }
-    }
+        // 6.3 Ranges
 
-    impl<I> Iterator for It<I>
-    where I : IteratorImpl {
-        type DistanceType = I::DistanceTypeImpl;
-        fn increment(&mut self) {
-            self.0.increment_impl();
-        }
-    }
-
-    //-----------------------------------------------------------------------------
-    // 6.3 Ranges
-
-    impl<I> Add<I::DistanceTypeImpl> for It<I> where I : IteratorImpl {
-        type Output = Self;
-        fn add(mut self, mut n : I::DistanceTypeImpl) -> Self {
+        fn add(mut self, mut n : Self::DistanceType) -> Self where Self : Sized {
             // Precondition: n >= 0 && weak_range(f, n)
-            while n != I::DistanceTypeImpl::zero() {
+            while n != Self::DistanceType::zero() {
                 n = n.predecessor();
                 self = self.successor();
             }
             self
         }
-    }
 
-    impl<I> Sub<It<I>> for It<I> where I : IteratorImpl {
-        type Output = I::DistanceTypeImpl;
-        fn sub(self, mut f : Self) -> Self::Output {
+        fn dif(self, mut f : Self) -> Self::DistanceType where Self : Sized {
             // Precondition: bounded_range(f, l)
-            let mut n = I::DistanceTypeImpl::zero();
-            while f != self {  
+            let mut n = Self::DistanceType::zero();
+            while f != self {
                 n = n.successor();
                 f = f.successor();
             }
             n
         }
-    }
+    }       
 
     //-----------------------------------------------------------------------------
     // 6.4 Readable Ranges
@@ -353,8 +316,6 @@ pub mod elements {
     // to having an equality operator.
     pub trait ForwardIterator : Iterator + Regular {}
 
-    impl<I> ForwardIterator for It<I> where It<I> : Iterator + Regular {}
-
     // Because a forward iterator is copyable we cam clone the iterator instead
     // of having to clone the data.
     pub fn find_adjacent_mismatch_forward<I, R>(mut f : I, l : &I, mut r : R) -> I
@@ -378,7 +339,7 @@ pub mod elements {
         // Precondition: readable_counted_range(f, n) && partitioned_n(f, n, p)
         while !n.is_zero() {
             let h : I::DistanceType = n.clone().half_nonnegative();
-            let m : I = f.clone() + h.clone();
+            let m : I = f.clone().add(h.clone());
             if p(m.source()) {
                 n = h;
             } else {
@@ -392,7 +353,7 @@ pub mod elements {
     pub fn partition_point<I, P>(f : I, l : I, p : P) -> I
     where I : ForwardIterator + Readable, P : FnMut(&I::ValueType) -> bool {
         // Precondition: readable_bounded_range(f, n) && partitioned(f, l, p)
-        partition_point_n(f.clone(), l - f, p)
+        partition_point_n(f.clone(), l.dif(f), p)
     }
 
     pub fn lower_bound_predicate<'a, R, D>(a : &'a D, mut r : R) -> Box<FnMut(&D) -> bool + 'a>
@@ -420,16 +381,27 @@ pub mod elements {
     //-----------------------------------------------------------------------------
     // 6.7 Indexed Iterators
 
-    pub trait IndexedIterator : ForwardIterator {
-        fn add(self, Self::DistanceType) -> Self;
-        fn sub(self, Self) -> Self::DistanceType;
-    }
+    pub trait IndexedIterator : ForwardIterator {}
 
     //-----------------------------------------------------------------------------
-    // 6.7 Indexed Iterators
+    // 6.7 Bidirectional Iterators
 
     pub trait BidirectionalIterator : ForwardIterator {
-        fn predecessor(self) -> Self;
+        fn decrement(&mut self);
+
+        fn predecessor(mut self) -> Self {
+            self.decrement();
+            self
+        }
+
+        fn sub(mut self, mut n : Self::DistanceType) -> Self {
+            // Precondition: n >= 0 && exists f . f in I => weak_range(f, n) && l = f + n
+            while !n.is_zero() {
+                n = n.predecessor();
+                self = self.predecessor();
+            }
+            self
+        }
     }
 }
 
@@ -443,6 +415,7 @@ mod test {
     use std::fmt::*;
     use std::ops::*;
     use elements::*;
+    use std::mem;
 
     //-----------------------------------------------------------------------------
     // Define Slice Iterator
@@ -453,10 +426,10 @@ mod test {
     } 
 
     impl<T> SliceIterator<T> {
-        fn new(r : &mut T) -> It<SliceIterator<T>> {
-            It(SliceIterator {
+        fn new(r : &mut T) -> SliceIterator<T> {
+            SliceIterator {
                 ptr : r as *mut T
-            })
+            }
         }
     }
 
@@ -477,12 +450,40 @@ mod test {
         }
     }
 
-    impl <T> IteratorImpl for SliceIterator<T> where T : PartialEq {
-        type DistanceTypeImpl = usize;
-        fn increment_impl(&mut self) {
+    impl<T> Iterator for SliceIterator<T> where SliceIterator<T> : PartialEq, T : Regular {
+        type DistanceType = usize;
+        fn increment(&mut self) {
             unsafe {
                 self.ptr = self.ptr.offset(1);
             }
+        }
+        fn add(self, n : Self::DistanceType) -> Self {
+            let m : isize = num::NumCast::from(n).unwrap();
+            unsafe {SliceIterator{ptr : self.ptr.offset(m)}}
+        }
+        fn dif(self, f : Self) -> <Self as Iterator>::DistanceType {
+            num::NumCast::from(
+                (self.ptr as usize - f.ptr as usize) / mem::size_of::<T>()
+            ).unwrap()
+        }
+    }
+
+    // This iterator is copyable.
+    impl<T> ForwardIterator for SliceIterator<T> where SliceIterator<T> : Iterator + Regular {}
+
+    // This iterator provides efficient add and sub operators.
+    impl<T> IndexedIterator for SliceIterator<T> where SliceIterator<T> : ForwardIterator {}
+
+    // This iterator is bidirectional.
+    impl<T> BidirectionalIterator for SliceIterator<T> where SliceIterator<T> : ForwardIterator {
+        fn decrement(&mut self) {
+            unsafe {
+                self.ptr = self.ptr.offset(-1);
+            }
+        }
+        fn sub(self, n : Self::DistanceType) -> Self {
+            let m : isize = num::NumCast::from(n).unwrap();
+            unsafe {SliceIterator{ptr : self.ptr.offset(-m)}}
         }
     }
 
@@ -627,7 +628,7 @@ mod test {
     fn test_partition_point<I>(f : I, l : &I, p : I::ValueType, q : I::DistanceType)
     where I : Readable + ForwardIterator, I::DistanceType : PartialEq {
         let i = partition_point(f.clone(), l.clone(), |a| a == &p);
-        assert!(l.clone() - i == q);
+        assert!(l.clone().dif(i) == q);
     }
 
     fn test_lower_bound_n<I>(f : I, n : I::DistanceType, x : I::ValueType, y : I::ValueType)
@@ -650,10 +651,10 @@ mod test {
         let mut w = [0, 1, 3, 2];
         let f = SliceIterator::new(v.first_mut().unwrap());
         let g = SliceIterator::new(w.first_mut().unwrap());
-        let l = f.clone() + v.len();
-        let m = g.clone() + w.len();
-        assert_eq!(v.len(), l.clone() - f.clone());
-        assert_eq!(w.len(), m.clone() - g.clone());
+        let l = f.clone().add(v.len());
+        let m = g.clone().add(w.len());
+        assert_eq!(v.len(), l.clone().dif(f.clone()));
+        assert_eq!(w.len(), m.clone().dif(g.clone()));
 
         test_for_each(f.clone(), &l, 0, 6);
         test_find(f.clone(), &l, 0, 2, 5);
