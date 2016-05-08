@@ -384,7 +384,7 @@ pub mod elements {
     pub trait IndexedIterator : ForwardIterator {}
 
     //-----------------------------------------------------------------------------
-    // 6.7 Bidirectional Iterators
+    // 6.8 Bidirectional Iterators
 
     pub trait BidirectionalIterator : ForwardIterator {
         fn decrement(&mut self);
@@ -402,6 +402,14 @@ pub mod elements {
             }
             self
         }
+    }
+
+    pub fn find_backward_if<I, P>(f : &I, mut l : I, mut p : P) -> I
+    where I : Readable + BidirectionalIterator, P : FnMut(&I::ValueType) -> bool {
+        while *f != l && !p(l.clone().predecessor().source()) {
+            l = l.predecessor();
+        }
+        l
     }
 }
 
