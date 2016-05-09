@@ -428,6 +428,25 @@ pub mod elements {
     }
 
     //-----------------------------------------------------------------------------
+    // 7.4 Isomorphism, Equivalence and Ordering
+
+    pub fn lexicographical_equivalent<I0, I1, R, V>(f0 : I0, l0 : &I0, f1 : I1, l1 : &I1, r : R) -> bool
+    where I0 : Readable<ValueType = V> + Iterator, I1 : Readable<ValueType = V> + Iterator,
+    R : FnMut(&V, &V) -> bool, V : Regular {
+        let p = find_mismatch(f0, l0, f1, l1, r);
+        p.0 == *l0 && p.1 == *l1
+    }
+
+    pub fn equal<T>(x : &T, y : &T) -> bool where T : Regular {
+        x == y
+    }
+        
+    pub fn lexicographical_equal<I0, I1, V>(f0 : I0, l0 : &I0, f1 : I1, l1 : &I1) -> bool
+    where I0 : Readable<ValueType = V> + Iterator, I1 : Readable<ValueType = V> + Iterator, V : Regular {
+        lexicographical_equivalent(f0, l0, f1, l1, equal::<V>)
+    }
+
+    //-----------------------------------------------------------------------------
     // 9.4 Swapping Ranges
 
     pub fn exchange_values<I0, I1>(x : &I0, y : &I1)
@@ -493,9 +512,7 @@ mod test {
     impl<T> Readable for SliceIterator<T> where T : Regular {
         fn source(&self) -> &T {
             let v : &T;
-            unsafe { 
-                v = &*((*self).ptr);
-            }
+            unsafe {v = &*((*self).ptr);}
             v
         }
     }
@@ -503,9 +520,7 @@ mod test {
     impl<T> Writable for SliceIterator<T> where T : Regular {
         fn sink(&self) -> &mut T {
             let v : &mut T;
-            unsafe {
-                v = &mut *((*self).ptr);
-            }
+            unsafe {v = &mut *((*self).ptr);}
             v
         }
     }
@@ -513,9 +528,7 @@ mod test {
     impl<T> Mutable for SliceIterator<T> where T : Regular {
         fn deref(&self) -> &mut T {
             let v : &mut T; 
-            unsafe {
-                v = &mut *((*self).ptr);
-            }
+            unsafe {v = &mut *((*self).ptr);}
             v
         }
     }
@@ -523,9 +536,7 @@ mod test {
     impl<T> Iterator for SliceIterator<T> where SliceIterator<T> : PartialEq, T : Regular {
         type DistanceType = usize;
         fn increment(&mut self) {
-            unsafe {
-                self.ptr = self.ptr.offset(1);
-            }
+            unsafe {self.ptr = self.ptr.offset(1);}
         }
         fn add(self, n : Self::DistanceType) -> Self {
             let m : isize = num::NumCast::from(n).unwrap();
@@ -547,9 +558,7 @@ mod test {
     // This iterator is bidirectional.
     impl<T> BidirectionalIterator for SliceIterator<T> where SliceIterator<T> : ForwardIterator {
         fn decrement(&mut self) {
-            unsafe {
-                self.ptr = self.ptr.offset(-1);
-            }
+            unsafe {self.ptr = self.ptr.offset(-1);}
         }
         fn sub(self, n : Self::DistanceType) -> Self {
             let m : isize = num::NumCast::from(n).unwrap();
@@ -740,9 +749,19 @@ mod test {
         test_partition_point(f.clone(), &l, 2, 2);
         test_lower_bound_n(f.clone(), v.len(), 1, 1);
         test_upper_bound_n(f.clone(), v.len(), 1, 2);
+    }
 
+    #[test]
+    fn test_reverse() {
+        let mut v = [0, 1, 2, 3];
+        let mut w = [3, 2, 1, 0];
+        let f = SliceIterator::new(v.first_mut().unwrap());
+        let g = SliceIterator::new(w.first_mut().unwrap());
+        let l = f.clone().add(v.len());
+        let m = g.clone().add(w.len());
         reverse_bidirectional(f.clone(), l.clone());
-        println!("{:?}", v);
+        let b : bool = lexicographical_equal(f, &l, g, &m);
+        assert!(b);
     }
 }
 
