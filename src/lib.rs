@@ -50,9 +50,21 @@ pub mod elements {
     // represents read-only access to containers. Ideally this is a read-only
     // version of Rusts 'Deref' trait, but we would like a value to derefence to
     // itself.
-    pub trait Readable {
+
+    pub trait Reference {
         type ValueType : Regular;
+    }
+
+    pub trait Readable : Reference {
         fn source(&self) -> &Self::ValueType;
+    }
+
+    pub trait Writable : Reference { // we cannot enforce a write only refernce in Rust
+        fn sink(&self) -> &mut Self::ValueType;
+    }
+
+    pub trait Mutable : Reference + Readable + Writable {
+        fn deref(&self) -> &mut Self::ValueType;
     }
 
     //-----------------------------------------------------------------------------
@@ -406,10 +418,37 @@ pub mod elements {
 
     pub fn find_backward_if<I, P>(f : &I, mut l : I, mut p : P) -> I
     where I : Readable + BidirectionalIterator, P : FnMut(&I::ValueType) -> bool {
-        while *f != l && !p(l.clone().predecessor().source()) {
+        if *f != l {
             l = l.predecessor();
+            while *f != l && !p(l.source()) {
+                l = l.predecessor();
+            }
         }
         l
+    }
+
+    //-----------------------------------------------------------------------------
+    // 9.4 Swapping Ranges
+
+    pub fn exchange_values<I0, I1>(x : &I0, y : &I1)
+    where I0 : Mutable<ValueType = I1::ValueType>, I1 : Mutable {
+        let t : I0::ValueType = x.source().clone();
+        *x.sink() = y.source().clone();
+        *y.sink() = t;
+    }
+
+    //-----------------------------------------------------------------------------
+    // 10.3 Reverse Algorithms
+
+    pub fn reverse_bidirectional<I>(mut f : I, mut l : I)
+    where I : Mutable + BidirectionalIterator {
+        loop {
+            if f == l {return;}
+            l = l.predecessor();
+            if f == l {return;}
+            exchange_values(&f, &l);
+            f = f.successor();
+        }
     }
 }
 
@@ -447,12 +486,35 @@ mod test {
         }
     }
 
-    impl<T> Readable for SliceIterator<T> where T : Regular {
+    impl<T> Reference for SliceIterator<T> where T : Regular {
         type ValueType = T;
+    }
+
+    impl<T> Readable for SliceIterator<T> where T : Regular {
         fn source(&self) -> &T {
             let v : &T;
             unsafe { 
                 v = &*((*self).ptr);
+            }
+            v
+        }
+    }
+
+    impl<T> Writable for SliceIterator<T> where T : Regular {
+        fn sink(&self) -> &mut T {
+            let v : &mut T;
+            unsafe {
+                v = &mut *((*self).ptr);
+            }
+            v
+        }
+    }
+
+    impl<T> Mutable for SliceIterator<T> where T : Regular {
+        fn deref(&self) -> &mut T {
+            let v : &mut T; 
+            unsafe {
+                v = &mut *((*self).ptr);
             }
             v
         }
@@ -499,24 +561,21 @@ mod test {
     // Test Slice Iterator
     
     fn test_for_each<I>(f : I, l : &I, j : I::ValueType, k : I::ValueType)
-    where I : Readable + Iterator,
-    <I as Readable>::ValueType : AddAssign<I::ValueType> + Debug {
+    where I : Readable + Iterator, <I as Reference>::ValueType : AddAssign<I::ValueType> + Debug {
         let mut s : I::ValueType = j;
         for_each(f, l, |v| s += (*v).clone());
         assert_eq!(s, k);
     }
 
     fn test_find<I>(f : I, l : &I, i : I::ValueType, j : I::ValueType, k : I::ValueType)
-    where I : Readable + Iterator,
-    <I as Readable>::ValueType : AddAssign<I::ValueType> + Debug {
+    where I : Readable + Iterator, <I as Reference>::ValueType : AddAssign<I::ValueType> + Debug {
         let mut s : I::ValueType = i;
         for_each(find(f, l, j), l, |v| s += (*v).clone());
         assert_eq!(s, k);
     } 
 
     fn test_find_if<I>(f : I, l : &I, i : I::ValueType, j : I::ValueType, k : I::ValueType)
-    where I : Readable + Iterator,
-    <I as Readable>::ValueType : AddAssign<I::ValueType> + Debug { 
+    where I : Readable + Iterator, <I as Reference>::ValueType : AddAssign<I::ValueType> + Debug { 
         let mut s : I::ValueType = i;
         for_each(find_if(f, l, |v| *v==j), l, |v| s += (*v).clone());
         assert_eq!(s, k);
@@ -537,29 +596,25 @@ mod test {
     }
 
     fn test_reduce_nonempty<I>(f : I, l : &I, k : I::ValueType)
-    where I : Readable + Iterator,
-    <I as Readable>::ValueType: Debug + Add<Output = I::ValueType> {
+    where I : Readable + Iterator, <I as Reference>::ValueType: Debug + Add<Output = I::ValueType> {
         let r = reduce_nonempty(f, l, |a, b| a + b, |a| (*a.source()).clone());
         assert_eq!(r, k);
     }
 
     fn test_reduce<I>(f : I, l : &I, i : I::ValueType, j : I::ValueType)
-    where I : Iterator + Readable,
-    <I as Readable>::ValueType : Add<Output = I::ValueType> + Debug {
+    where I : Iterator + Readable, <I as Reference>::ValueType : Add<Output = I::ValueType> + Debug {
         let r = reduce(f, l, |a, b| a + b, |a| (*a.source()).clone(), i);
         assert_eq!(r, j);
     }
 
     fn test_reduce_nonzeroes<I>(f : I, l : &I, i : I::ValueType, j : I::ValueType)
-    where I : Readable + Iterator,
-    <I as Readable>::ValueType : Add<Output = I::ValueType> + Debug {
+    where I : Readable + Iterator, <I as Reference>::ValueType : Add<Output = I::ValueType> + Debug {
         let r = reduce_nonzeroes(f, l, |a, b| a + b, |a| (*a.source()).clone(), i);
         assert_eq!(r, j);
     }
 
     fn test_for_each_n<I>(f : I, n : I::DistanceType, j : I::ValueType, k : I::ValueType)
-    where I : Readable + Iterator,
-    <I as Readable>::ValueType : AddAssign<I::ValueType> + Debug {
+    where I : Readable + Iterator, <I as Reference>::ValueType : AddAssign<I::ValueType> + Debug {
         let mut s : I::ValueType = j;
         for_each_n(f, n, |v| s += (*v).clone());
         assert_eq!(s, k);
@@ -567,8 +622,7 @@ mod test {
 
     fn test_find_n<I>(f : I, n : I::DistanceType, i : I::ValueType,
         j : I::ValueType, k : I::ValueType)
-    where I : Readable + Iterator,
-    <I as Readable>::ValueType : AddAssign<I::ValueType> + Debug {
+    where I : Readable + Iterator, <I as Reference>::ValueType : AddAssign<I::ValueType> + Debug {
         let mut s : I::ValueType = i;
         let (g, m) = find_n(f, n, j);
         for_each_n(g, m, |v| s += (*v).clone());
@@ -577,8 +631,7 @@ mod test {
 
     fn test_find_if_unguarded<I>(f : I, l : &I, i : I::ValueType, j : I::ValueType,
         k : I::ValueType)
-    where I : Readable + Iterator,
-    <I as Readable>::ValueType : AddAssign<I::ValueType> + Debug {
+    where I : Readable + Iterator, <I as Reference>::ValueType : AddAssign<I::ValueType> + Debug {
         let mut s : I::ValueType = i;
         for_each(find_if_unguarded(f, |v| *v==j), l, |v| s += (*v).clone());
         assert_eq!(s, k);
@@ -687,6 +740,9 @@ mod test {
         test_partition_point(f.clone(), &l, 2, 2);
         test_lower_bound_n(f.clone(), v.len(), 1, 1);
         test_upper_bound_n(f.clone(), v.len(), 1, 2);
+
+        reverse_bidirectional(f.clone(), l.clone());
+        println!("{:?}", v);
     }
 }
 
