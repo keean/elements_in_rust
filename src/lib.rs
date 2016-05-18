@@ -428,6 +428,14 @@ pub mod elements {
     }
 
     //-----------------------------------------------------------------------------
+    // 6.9 Random Access Iterators
+    
+    pub trait RandomAccessIterator : IndexedIterator + BidirectionalIterator {
+        type DifferenceType : Integer;
+        fn lt(&self, y: &Self) -> bool;
+    }
+
+    //-----------------------------------------------------------------------------
     // 7.4 Isomorphism, Equivalence and Ordering
 
     pub fn lexicographical_equivalent<I0, I1, R, V>(f0 : I0, l0 : &I0, f1 : I1, l1 : &I1, r : R) -> bool
