@@ -432,7 +432,7 @@ pub mod elements {
     
     pub trait RandomAccessIterator : IndexedIterator + BidirectionalIterator {
         type DifferenceType : Integer;
-        fn lt(&self, y: &Self) -> bool;
+        fn less_than(&self, y: &Self) -> bool;
     }
 
     //-----------------------------------------------------------------------------
@@ -571,6 +571,14 @@ mod test {
         fn sub(self, n : Self::DistanceType) -> Self {
             let m : isize = num::NumCast::from(n).unwrap();
             unsafe {SliceIterator{ptr : self.ptr.offset(-m)}}
+        }
+    }
+
+    impl<T> RandomAccessIterator for SliceIterator<T>
+    where SliceIterator<T> : IndexedIterator + BidirectionalIterator {
+        type DifferenceType = isize;
+        fn less_than(&self, y : &Self) -> bool {
+            (self.ptr as usize) < (y.ptr as usize)
         }
     }
 
