@@ -731,6 +731,13 @@ mod test {
         assert!(i.source() == &y);
     }
 
+    fn test_find_backward_if<I>(f : &I, l : I, i : I::ValueType, j : I::ValueType, k : I::ValueType)
+    where I : Readable + BidirectionalIterator, <I as Reference>::ValueType : AddAssign<I::ValueType> + Debug {
+        let mut s : I::ValueType = i;
+        for_each(find_backward_if(f, l.clone(), |v| *v==j), &l, |v| s += (*v).clone());
+        assert_eq!(s, k);
+    }
+
     #[test]
     fn test_iterators() {
         let mut v = [0, 1, 2, 3];
@@ -765,6 +772,7 @@ mod test {
         test_partition_point(f.clone(), &l, 2, 2);
         test_lower_bound_n(f.clone(), v.len(), 1, 1);
         test_upper_bound_n(f.clone(), v.len(), 1, 2);
+        test_find_backward_if(&f, l.clone(), 0, 2, 5);
     }
 
     #[test]
