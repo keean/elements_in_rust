@@ -5,7 +5,7 @@ pub mod elements {
     use std::ops::{Shr};
     use self::num::{Zero, One, NumCast};
 
-    //-----------------------------------------------------------------------------
+    //=============================================================================
     // 1.5 Regular Types
 
     // Regular types enable normal value semantics, except we require explicit
@@ -15,7 +15,7 @@ pub mod elements {
     // A type is regular if it has assignment, equality, and is clonable.
     impl<I> Regular for I where I : PartialEq + Clone {}
 
-    //-----------------------------------------------------------------------------
+    //=============================================================================
     // 2.1 Integers
 
     // This is an incomplete implementation of the Integer concept with just the 
@@ -43,7 +43,7 @@ pub mod elements {
     impl<I> Integer for I
     where I : num::Integer + Regular + Shr<I, Output = I> + NumCast {}
 
-    //-----------------------------------------------------------------------------
+    //=============================================================================
     // 6.1 Readability
 
     // Readability is roughly equivalent to a read-only reference in Rust, but also
@@ -435,6 +435,13 @@ pub mod elements {
         fn less_than(&self, y: &Self) -> bool;
     }
 
+    //=============================================================================
+    // 7.1 Bifurcate Coordinates
+    
+    pub trait BifurcateCoordinate : Regular {
+        type WeightType : Integer;
+    }
+    
     //-----------------------------------------------------------------------------
     // 7.4 Isomorphism, Equivalence and Ordering
 
