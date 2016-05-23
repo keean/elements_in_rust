@@ -277,7 +277,8 @@ pub mod elements {
     where I : Iterator + Readable, R : FnMut(&I::ValueType, &I::ValueType) -> bool {
         // Precondition: readable_bounded_range(f, l)
         if f != *l {
-            let mut x : I::ValueType = (*f.source()).clone();
+            //let mut x : I::ValueType = (*f.source()).clone();
+            let mut x = (*f.source()).clone();
             f = f.successor();
             while (f != *l) && r(&x, f.source()) {
                 x = (*f.source()).clone();
@@ -333,15 +334,14 @@ pub mod elements {
     pub fn find_adjacent_mismatch_forward<I, R>(mut f : I, l : &I, mut r : R) -> I
     where I : ForwardIterator + Readable, R : FnMut(&I::ValueType, &I::ValueType) -> bool {
         // Precondition: readable_bounded_range(f, l)
-        if f == *l {
-            return f; // return f not l because we own it
-        }
-        let mut t : I;
-        while {
-            t = f.clone();
+        if f != *l {
+            let mut t = f.clone();
             f = f.successor();
-            f != *l && r(t.source(), f.source())
-        } {} // would loop/break be better?
+            while f != *l && r(t.source(), f.source()) {
+                t = t.successor();
+                f = f.successor();
+            }
+        }
         f
     }
 
