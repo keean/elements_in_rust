@@ -96,10 +96,10 @@ pub mod elements {
             self
         }
 
-        fn dif(self, mut f : Self) -> Self::DistanceType where Self : Sized {
+        fn dif(&self, mut f : Self) -> Self::DistanceType where Self : Sized {
             // Precondition: bounded_range(f, l)
             let mut n = Self::DistanceType::zero();
-            while f != self {
+            while f != *self {
                 n = n.successor();
                 f = f.successor();
             }
@@ -440,8 +440,27 @@ pub mod elements {
     
     pub trait BifurcateCoordinate : Regular {
         type WeightType : Integer;
+        fn empty(&self) -> bool;
+        fn has_left_successor(&self) -> bool;
+        fn has_right_successor(&self) -> bool;
+        fn left_successor(self) -> Self;
+        fn right_successor(self) -> Self;
     }
-    
+
+    pub fn weight_recursive<C>(c : C) -> C::WeightType where C : BifurcateCoordinate {
+        // Precondition: tree(c)
+        if c.empty() {return C::WeightType::zero();}
+        let mut l = C::WeightType::zero();
+        let mut r = C::WeightType::zero();
+        if c.has_left_successor() {
+            l = weight_recursive(c.clone().left_successor());
+        }
+        if c.has_right_successor() {
+            r = weight_recursive(c.right_successor());
+        }
+        (l + r).successor()
+    }
+
     //-----------------------------------------------------------------------------
     // 7.4 Isomorphism, Equivalence and Ordering
 
@@ -501,15 +520,31 @@ mod test {
     //-----------------------------------------------------------------------------
     // Define Slice Iterator
 
+    trait Iterable {
+        type IteratorType;
+        fn begin(&mut self) -> Self::IteratorType;
+        fn end(&mut self) -> Self::IteratorType;
+    }
+
     #[derive(Clone, PartialEq, Debug)]
     struct SliceIterator<T> {
         ptr : *mut T
     } 
 
+    impl<T> Iterable for [T] {
+        type IteratorType = SliceIterator<T>;
+        fn begin(&mut self) -> Self::IteratorType {
+            SliceIterator::new(self.first_mut().unwrap())
+        }
+        fn end(&mut self) -> Self::IteratorType {
+            SliceIterator::new(unsafe{(self.last_mut().unwrap() as *mut T).offset(1)})
+        }
+    }
+
     impl<T> SliceIterator<T> {
-        fn new(r : &mut T) -> SliceIterator<T> {
+        fn new(r : *mut T) -> SliceIterator<T> {
             SliceIterator {
-                ptr : r as *mut T
+                ptr : r
             }
         }
     }
@@ -557,7 +592,7 @@ mod test {
             let m : isize = num::NumCast::from(n).unwrap();
             unsafe {SliceIterator{ptr : self.ptr.offset(m)}}
         }
-        fn dif(self, f : Self) -> <Self as Iterator>::DistanceType {
+        fn dif(&self, f : Self) -> <Self as Iterator>::DistanceType {
             num::NumCast::from(
                 (self.ptr as usize - f.ptr as usize) / mem::size_of::<T>()
             ).unwrap()
@@ -749,10 +784,10 @@ mod test {
     fn test_iterators() {
         let mut v = [0, 1, 2, 3];
         let mut w = [0, 1, 3, 2];
-        let f = SliceIterator::new(v.first_mut().unwrap());
-        let g = SliceIterator::new(w.first_mut().unwrap());
-        let l = f.clone().add(v.len());
-        let m = g.clone().add(w.len());
+        let f = v.begin();
+        let g = w.begin();
+        let l = v.end();
+        let m = w.end();
         assert_eq!(v.len(), l.clone().dif(f.clone()));
         assert_eq!(w.len(), m.clone().dif(g.clone()));
 
@@ -786,10 +821,10 @@ mod test {
     fn test_reverse() {
         let mut v = [0, 1, 2, 3];
         let mut w = [3, 2, 1, 0];
-        let f = SliceIterator::new(v.first_mut().unwrap());
-        let g = SliceIterator::new(w.first_mut().unwrap());
-        let l = f.clone().add(v.len());
-        let m = g.clone().add(w.len());
+        let f = v.begin();
+        let g = w.begin();
+        let l = v.end();
+        let m = w.end();
         reverse_bidirectional(f.clone(), l.clone());
         let b : bool = lexicographical_equal(f, &l, g, &m);
         assert!(b);
