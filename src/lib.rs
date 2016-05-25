@@ -2,6 +2,7 @@ pub mod elements {
 
     extern crate num;
 
+    use std::cmp::{max};
     use std::ops::{Shr};
     use self::num::{Zero, One, NumCast};
 
@@ -459,6 +460,37 @@ pub mod elements {
             r = weight_recursive(c.right_successor());
         }
         (l + r).successor()
+    }
+
+    pub fn height_recursive<C>(c : C) -> C::WeightType where C : BifurcateCoordinate {
+        // Precondition: tree(c)
+        if c.empty() {return C::WeightType::zero();}
+        let mut l = C::WeightType::zero();
+        let mut r = C::WeightType::zero();
+        if c.has_left_successor() {
+            l = height_recursive(c.clone().left_successor());
+        }
+        if c.has_right_successor() {
+            r = height_recursive(c.right_successor());
+        }
+        max(l, r).successor()
+    }
+
+    pub enum Visit {Pre, In, Post}
+
+    pub fn traverse_nonempty<C, P>(c : C, mut p : P) -> P
+    where C : BifurcateCoordinate, P : FnMut(Visit, &C) {
+        // Precondition: tree(c) /\ ~empty(c)
+        p(Visit::Pre, &c);
+        if c.has_left_successor() {
+            p = traverse_nonempty(c.clone().left_successor(), p);
+        }
+        p(Visit::In, &c);
+        if c.has_right_successor() {
+            p = traverse_nonempty(c.clone().right_successor(), p);
+        }
+        p(Visit::Post, &c);
+        return p;
     }
 
     //-----------------------------------------------------------------------------
