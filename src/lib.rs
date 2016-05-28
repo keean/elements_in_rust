@@ -3,7 +3,7 @@ pub mod elements {
     extern crate num;
 
     use std::cmp::{max};
-    use std::ops::{Shr};
+    use std::ops::{ShrAssign, AddAssign, SubAssign};
     use self::num::{Zero, One, NumCast};
 
     //=============================================================================
@@ -21,8 +21,8 @@ pub mod elements {
 
     // This is an incomplete implementation of the Integer concept with just the 
     // functions necessary for the iterator algorithms below.
-    pub trait Integer : num::Integer + NumCast
-    where Self : Regular + Shr<Self, Output = Self> 
+    pub trait Integer : num::Integer
+    where Self : Regular + NumCast + ShrAssign<Self> + AddAssign<Self> + SubAssign<Self>
     {
         fn two() -> Self where Self : NumCast {
             Self::from(2).unwrap()
@@ -30,19 +30,32 @@ pub mod elements {
         fn is_two(&self) -> bool where Self : NumCast + PartialEq {
             *self == Self::from(2).unwrap()
         }
-        fn successor(self) -> Self where Self : Sized {
-            self + Self::one()
+        fn successor_mut(&mut self) {
+            *self += Self::one()
         }
-        fn predecessor(self) -> Self where Self : Sized {
-            self - Self::one()
+        fn predecessor_mut(&mut self) {
+            *self -= Self::one();
         }
-        fn half_nonnegative(self) -> Self where Self : Sized {
-            self >> Self::one()
+        fn half_nonnegative_mut(&mut self) {
+            *self >>= Self::one()
+        }
+        fn successor(mut self) -> Self {
+            self.successor_mut();
+            self
+        }
+        fn predecessor(mut self) -> Self { // where Self : Sized {
+            self.predecessor_mut();
+            self
+        }
+        fn half_nonnegative(mut self) -> Self {
+            self.half_nonnegative_mut();
+            self
         }
     }
 
     impl<I> Integer for I
-    where I : num::Integer + Regular + Shr<I, Output = I> + NumCast {}
+    where I : num::Integer + NumCast + Regular
+        + ShrAssign<I> + AddAssign<I> + SubAssign<I> {}
 
     //=============================================================================
     // 6.1 Readability
@@ -79,21 +92,25 @@ pub mod elements {
     // context.
     pub trait Iterator : PartialEq {
         type DistanceType : Integer;
-        fn increment(&mut self);
+        fn successor_mut(&mut self);
 
         fn successor(mut self) -> Self where Self : Sized {
-            self.increment();
+            self.successor_mut();
             self
         }
 
         // 6.3 Ranges
 
-        fn add(mut self, mut n : Self::DistanceType) -> Self where Self : Sized {
+        fn add_mut(&mut self, mut n : Self::DistanceType) {
             // Precondition: n >= 0 && weak_range(f, n)
             while n != Self::DistanceType::zero() {
-                n = n.predecessor();
-                self = self.successor();
+                n.predecessor_mut();
+                self.successor_mut();
             }
+        }
+
+        fn add(mut self, n : Self::DistanceType) -> Self where Self : Sized {
+            self.add_mut(n);
             self
         }
 
@@ -444,8 +461,18 @@ pub mod elements {
         fn empty(&self) -> bool;
         fn has_left_successor(&self) -> bool;
         fn has_right_successor(&self) -> bool;
-        fn left_successor(self) -> Self;
-        fn right_successor(self) -> Self;
+        fn left_increment(&mut self);
+        fn right_increment(&mut self);
+
+        fn left_successor(mut self) -> Self {
+            self.left_increment();
+            self
+        }
+
+        fn right_successor(mut self) -> Self {
+            self.right_increment();
+            self
+        }
     }
 
     pub fn weight_recursive<C>(c : C) -> C::WeightType where C : BifurcateCoordinate {
@@ -491,6 +518,63 @@ pub mod elements {
         }
         p(Visit::Post, &c);
         return p;
+    }
+
+    //-----------------------------------------------------------------------------
+    // 7.2 Bidirectional Bifurcate Coordinates
+
+    pub trait BidirectionalBifurcateCoordinate : BifurcateCoordinate {
+        fn has_predecessor(&self) -> bool;
+        fn decrement(&mut self);
+        fn predecessor(mut self) -> Self {
+            self.decrement();
+            self
+        }
+    }
+
+    pub fn is_left_successor<T>(j : &T) -> bool
+    where T : BidirectionalBifurcateCoordinate {
+        // Precondition: has_predecessor(j)
+        let i = j.clone().predecessor();
+        i.has_left_successor() && i.left_successor() == *j
+    }
+
+    pub fn is_right_successor<T>(j : &T) -> bool
+    where T : BidirectionalBifurcateCoordinate {
+        // Precondition: has_predecessor(j)
+        let i = j.clone().predecessor();
+        i.has_right_successor() && i.right_successor() == *j
+    }
+
+    pub fn traverse_step<C>(v : &mut Visit, c : &mut C) -> i32
+    where C : BidirectionalBifurcateCoordinate {
+        // Precondition: has_predecessor(v) || v != post
+        match *v {
+            Visit::Pre => {
+                if c.has_left_successor() {
+                    c.left_increment();
+                    return 1;
+                }
+                *v = Visit::In;
+                return 0;   
+            },
+            Visit::In => {
+                if c.has_right_successor() {
+                    *v = Visit::Pre;
+                    c.right_increment();
+                    return 1;
+                }
+                *v = Visit::Post;
+                return 0;
+            },
+            Visit::Post => {
+                if is_left_successor(c) {
+                    *v = Visit::In;
+                }
+                c.decrement();
+                return -1;
+            }
+        }
     }
 
     //-----------------------------------------------------------------------------
@@ -617,7 +701,7 @@ mod test {
 
     impl<T> Iterator for SliceIterator<T> where SliceIterator<T> : PartialEq, T : Regular {
         type DistanceType = usize;
-        fn increment(&mut self) {
+        fn successor_mut(&mut self) {
             unsafe {self.ptr = self.ptr.offset(1);}
         }
         fn add(self, n : Self::DistanceType) -> Self {
