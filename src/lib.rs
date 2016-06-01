@@ -30,25 +30,25 @@ pub mod elements {
         fn is_two(&self) -> bool where Self : NumCast + PartialEq {
             *self == Self::from(2).unwrap()
         }
-        fn alter_successor(&mut self) {
+        fn successor_assign(&mut self) {
             *self += Self::one()
         }
-        fn alter_predecessor(&mut self) {
+        fn predecessor_assign(&mut self) {
             *self -= Self::one();
         }
-        fn alter_half_nonnegative(&mut self) {
+        fn half_nonnegative_assign(&mut self) {
             *self >>= Self::one()
         }
         fn successor(mut self) -> Self {
-            self.alter_successor();
+            self.successor_assign();
             self
         }
         fn predecessor(mut self) -> Self { // where Self : Sized {
-            self.alter_predecessor();
+            self.predecessor_assign();
             self
         }
         fn half_nonnegative(mut self) -> Self {
-            self.alter_half_nonnegative();
+            self.half_nonnegative_assign();
             self
         }
     }
@@ -92,25 +92,25 @@ pub mod elements {
     // context.
     pub trait Iterator : PartialEq {
         type DistanceType : Integer;
-        fn alter_successor(&mut self);
+        fn successor_assign(&mut self);
 
         fn successor(mut self) -> Self where Self : Sized {
-            self.alter_successor();
+            self.successor_assign();
             self
         }
 
         // 6.3 Ranges
 
-        fn alter_add(&mut self, mut n : Self::DistanceType) {
+        fn add_assign(&mut self, mut n : Self::DistanceType) {
             // Precondition: n >= 0 && weak_range(f, n)
             while n != Self::DistanceType::zero() {
-                n.alter_predecessor();
-                self.alter_successor();
+                n.predecessor_assign();
+                self.successor_assign();
             }
         }
 
         fn add(mut self, n : Self::DistanceType) -> Self where Self : Sized {
-            self.alter_add(n);
+            self.add_assign(n);
             self
         }
 
@@ -417,24 +417,24 @@ pub mod elements {
     // 6.8 Bidirectional Iterators
 
     pub trait BidirectionalIterator : ForwardIterator {
-        fn alter_predecessor(&mut self);
+        fn predecessor_assign(&mut self);
 
         fn predecessor(mut self) -> Self {
-            self.alter_predecessor();
+            self.predecessor_assign();
             self
         }
 
-        fn alter_sub(&mut self, mut n : Self::DistanceType) {
+        fn sub_assign(&mut self, mut n : Self::DistanceType) {
             // Precondition: n >= 0 && exists f . f in I => weak_range(f, n) && l = f + n
             while !n.is_zero() {
-                n.alter_predecessor();
-                self.alter_predecessor();
+                n.predecessor_assign();
+                self.predecessor_assign();
             }
         }
 
 
         fn sub(mut self, n : Self::DistanceType) -> Self {
-            self.alter_sub(n);
+            self.sub_assign(n);
             self
         }
     }
@@ -530,9 +530,9 @@ pub mod elements {
 
     pub trait BidirectionalBifurcateCoordinate : BifurcateCoordinate {
         fn has_predecessor(&self) -> bool;
-        fn alter_predecessor(&mut self);
+        fn predecessor_assign(&mut self);
         fn predecessor(mut self) -> Self {
-            self.alter_predecessor();
+            self.predecessor_assign();
             self
         }
     }
@@ -576,7 +576,7 @@ pub mod elements {
                 if is_left_successor(c) {
                     *v = Visit::In;
                 }
-                c.alter_predecessor();
+                c.predecessor_assign();
                 return -1;
             }
         }
@@ -714,10 +714,10 @@ mod test {
 
     impl<'a, T> Iterator for SliceIterator<'a, T> where SliceIterator<'a, T> : PartialEq, T : Regular {
         type DistanceType = usize;
-        fn alter_successor(&mut self) {
+        fn successor_assign(&mut self) {
             unsafe {self.ptr = self.ptr.offset(1)};
         }
-        fn alter_add(&mut self, n : Self::DistanceType) {
+        fn add_assign(&mut self, n : Self::DistanceType) {
             let m : isize = num::NumCast::from(n).unwrap();
             unsafe {self.ptr = self.ptr.offset(m)};
         }
@@ -736,10 +736,10 @@ mod test {
 
     // This iterator is bidirectional.
     impl<'a, T> BidirectionalIterator for SliceIterator<'a, T> where SliceIterator<'a, T> : ForwardIterator {
-        fn alter_predecessor(&mut self) {
+        fn predecessor_assign(&mut self) {
             unsafe {self.ptr = self.ptr.offset(-1)}
         }
-        fn alter_sub(&mut self, n : Self::DistanceType) {
+        fn sub_assign(&mut self, n : Self::DistanceType) {
             let m : isize = num::NumCast::from(n).unwrap();
             unsafe {self.ptr = self.ptr.offset(-m)}
         }
