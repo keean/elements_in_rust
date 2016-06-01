@@ -508,6 +508,7 @@ pub mod elements {
         max(l, r).successor()
     }
 
+    #[derive(PartialEq)]
     pub enum Visit {Pre, In, Post}
 
     pub fn traverse_nonempty<C, P>(c : C, mut p : P) -> P
@@ -580,6 +581,26 @@ pub mod elements {
                 return -1;
             }
         }
+    }
+
+    pub fn reachable<C>(mut x : C, y : C) -> bool
+    where C : BidirectionalBifurcateCoordinate {
+        // Precondition : tree(c)
+        if x.empty() {
+            return false;
+        }
+        let root = x.clone();
+        let mut v = Visit::Pre;
+        loop {
+            if x == y {
+                return true;
+            }
+            traverse_step(&mut v, &mut x);
+            if x != root && v != Visit::Post {
+                break;
+            }
+        }
+        return false;
     }
 
     //-----------------------------------------------------------------------------
