@@ -30,25 +30,25 @@ pub mod elements {
         fn is_two(&self) -> bool where Self : NumCast + PartialEq {
             *self == Self::from(2).unwrap()
         }
-        fn successor_mut(&mut self) {
+        fn alter_successor(&mut self) {
             *self += Self::one()
         }
-        fn predecessor_mut(&mut self) {
+        fn alter_predecessor(&mut self) {
             *self -= Self::one();
         }
-        fn half_nonnegative_mut(&mut self) {
+        fn alter_half_nonnegative(&mut self) {
             *self >>= Self::one()
         }
         fn successor(mut self) -> Self {
-            self.successor_mut();
+            self.alter_successor();
             self
         }
         fn predecessor(mut self) -> Self { // where Self : Sized {
-            self.predecessor_mut();
+            self.alter_predecessor();
             self
         }
         fn half_nonnegative(mut self) -> Self {
-            self.half_nonnegative_mut();
+            self.alter_half_nonnegative();
             self
         }
     }
@@ -92,25 +92,25 @@ pub mod elements {
     // context.
     pub trait Iterator : PartialEq {
         type DistanceType : Integer;
-        fn successor_mut(&mut self);
+        fn alter_successor(&mut self);
 
         fn successor(mut self) -> Self where Self : Sized {
-            self.successor_mut();
+            self.alter_successor();
             self
         }
 
         // 6.3 Ranges
 
-        fn add_mut(&mut self, mut n : Self::DistanceType) {
+        fn alter_add(&mut self, mut n : Self::DistanceType) {
             // Precondition: n >= 0 && weak_range(f, n)
             while n != Self::DistanceType::zero() {
-                n.predecessor_mut();
-                self.successor_mut();
+                n.alter_predecessor();
+                self.alter_successor();
             }
         }
 
         fn add(mut self, n : Self::DistanceType) -> Self where Self : Sized {
-            self.add_mut(n);
+            self.alter_add(n);
             self
         }
 
@@ -417,19 +417,24 @@ pub mod elements {
     // 6.8 Bidirectional Iterators
 
     pub trait BidirectionalIterator : ForwardIterator {
-        fn decrement(&mut self);
+        fn alter_predecessor(&mut self);
 
         fn predecessor(mut self) -> Self {
-            self.decrement();
+            self.alter_predecessor();
             self
         }
 
-        fn sub(mut self, mut n : Self::DistanceType) -> Self {
+        fn alter_sub(&mut self, mut n : Self::DistanceType) {
             // Precondition: n >= 0 && exists f . f in I => weak_range(f, n) && l = f + n
             while !n.is_zero() {
-                n = n.predecessor();
-                self = self.predecessor();
+                n.alter_predecessor();
+                self.alter_predecessor();
             }
+        }
+
+
+        fn sub(mut self, n : Self::DistanceType) -> Self {
+            self.alter_sub(n);
             self
         }
     }
@@ -455,22 +460,22 @@ pub mod elements {
 
     //=============================================================================
     // 7.1 Bifurcate Coordinates
-    
+   
     pub trait BifurcateCoordinate : Regular {
         type WeightType : Integer;
         fn empty(&self) -> bool;
         fn has_left_successor(&self) -> bool;
         fn has_right_successor(&self) -> bool;
-        fn left_increment(&mut self);
-        fn right_increment(&mut self);
+        fn left_successor_assign(&mut self);
+        fn right_successor_assign(&mut self);
 
         fn left_successor(mut self) -> Self {
-            self.left_increment();
+            self.left_successor_assign();
             self
         }
 
         fn right_successor(mut self) -> Self {
-            self.right_increment();
+            self.right_successor_assign();
             self
         }
     }
@@ -525,9 +530,9 @@ pub mod elements {
 
     pub trait BidirectionalBifurcateCoordinate : BifurcateCoordinate {
         fn has_predecessor(&self) -> bool;
-        fn decrement(&mut self);
+        fn alter_predecessor(&mut self);
         fn predecessor(mut self) -> Self {
-            self.decrement();
+            self.alter_predecessor();
             self
         }
     }
@@ -552,7 +557,7 @@ pub mod elements {
         match *v {
             Visit::Pre => {
                 if c.has_left_successor() {
-                    c.left_increment();
+                    c.left_successor_assign();
                     return 1;
                 }
                 *v = Visit::In;
@@ -561,7 +566,7 @@ pub mod elements {
             Visit::In => {
                 if c.has_right_successor() {
                     *v = Visit::Pre;
-                    c.right_increment();
+                    c.right_successor_assign();
                     return 1;
                 }
                 *v = Visit::Post;
@@ -571,7 +576,7 @@ pub mod elements {
                 if is_left_successor(c) {
                     *v = Visit::In;
                 }
-                c.decrement();
+                c.alter_predecessor();
                 return -1;
             }
         }
@@ -630,83 +635,91 @@ mod test {
 
     use std::fmt::*;
     use std::ops::*;
+    use std::marker::PhantomData;
     use elements::*;
     use std::mem;
 
     //-----------------------------------------------------------------------------
     // Define Slice Iterator
 
-    trait Iterable {
-        type IteratorType;
-        fn begin(&mut self) -> Self::IteratorType;
-        fn end(&mut self) -> Self::IteratorType;
+    trait Iterable<'a> {
+        type IteratorType : Iterator;
+        fn begin(&'a self) -> Self::IteratorType;
+        fn end(&'a self) -> Self::IteratorType;
     }
+
+    trait IterableMut<'a> {
+        type IteratorTypeMut : Iterator;
+        fn begin_mut(&'a mut self) -> Self::IteratorTypeMut;
+        fn end_mut(&'a mut self) -> Self::IteratorTypeMut;
+    }
+
 
     #[derive(Clone, PartialEq, Debug)]
-    struct SliceIterator<T> {
-        ptr : *mut T
+    struct SliceIterator<'a, T> where T : 'a {
+        ptr : *const T,
+        phantom : PhantomData<&'a ()>
     } 
 
-    impl<T> Iterable for [T] {
-        type IteratorType = SliceIterator<T>;
-        fn begin(&mut self) -> Self::IteratorType {
-            SliceIterator::new(self.first_mut().unwrap())
+    impl<'a, T> Iterable<'a> for [T] where T : PartialEq + Clone + Debug + 'a {
+        type IteratorType = SliceIterator<'a, T>;
+        fn begin(&'a self) -> Self::IteratorType {
+            SliceIterator::new(self.first().unwrap())
         }
-        fn end(&mut self) -> Self::IteratorType {
-            SliceIterator::new(unsafe{(self.last_mut().unwrap() as *mut T).offset(1)})
+        fn end(&'a self) -> Self::IteratorType {
+            SliceIterator::new(self.last().unwrap()).successor()
         }
     }
 
-    impl<T> SliceIterator<T> {
-        fn new(r : *mut T) -> SliceIterator<T> {
+    impl<'a, T> SliceIterator<'a, T> {
+        fn new(r : &'a T) -> SliceIterator<'a, T> {
             SliceIterator {
-                ptr : r
+                ptr : r,
+                phantom : PhantomData
             }
         }
     }
 
-    impl<T> Display for SliceIterator<T> where T : Display {
+    impl<'a, T> Display for SliceIterator<'a, T> where T : Display {
         fn fmt(&self, f : &mut Formatter) -> Result {
-            write!(f, "{}", self.ptr as usize)
+            write!(f, "{}", (self.ptr as *const T) as usize)
         }
     }
 
-    impl<T> Reference for SliceIterator<T> where T : Regular {
+    impl<'a, T> Reference for SliceIterator<'a, T> where T : Regular {
         type ValueType = T;
     }
 
-    impl<T> Readable for SliceIterator<T> where T : Regular {
+    impl<'a, T> Readable for SliceIterator<'a, T> where T : Regular {
         fn source(&self) -> &T {
-            let v : &T;
-            unsafe {v = &*((*self).ptr);}
-            v
+            unsafe {&*self.ptr}
         }
     }
 
-    impl<T> Writable for SliceIterator<T> where T : Regular {
-        fn sink(&self) -> &mut T {
-            let v : &mut T;
-            unsafe {v = &mut *((*self).ptr);}
-            v
-        }
-    }
+    //impl<T> Writable for SliceIterator<T> where T : Regular {
+    //     fn sink(&self) -> &mut T {
+    //        let v : &mut T;
+    //        unsafe {v = &mut *((*self).ptr);}
+    //       v
+    //   ;}
+    //}
 
-    impl<T> Mutable for SliceIterator<T> where T : Regular {
-        fn deref(&self) -> &mut T {
-            let v : &mut T; 
-            unsafe {v = &mut *((*self).ptr);}
-            v
-        }
-    }
+    //impl<T> Mutable for SliceIterator<T> where T : Regular {
+    //    fn deref(&self) -> &mut T {
+    //        let v : &mut T; 
+    //        unsafe {v = &mut *((*self).ptr);}
+    //        v
+    //    }
+    //}
 
-    impl<T> Iterator for SliceIterator<T> where SliceIterator<T> : PartialEq, T : Regular {
+    impl<'a, T> Iterator for SliceIterator<'a, T> where SliceIterator<'a, T> : PartialEq, T : Regular {
         type DistanceType = usize;
-        fn successor_mut(&mut self) {
-            unsafe {self.ptr = self.ptr.offset(1);}
+        fn alter_successor(&mut self) {
+            unsafe {self.ptr = self.ptr.offset(1)};
         }
-        fn add(self, n : Self::DistanceType) -> Self {
+        fn alter_add(&mut self, n : Self::DistanceType) {
             let m : isize = num::NumCast::from(n).unwrap();
-            unsafe {SliceIterator{ptr : self.ptr.offset(m)}}
+            unsafe {self.ptr = self.ptr.offset(m)};
         }
         fn dif(&self, f : Self) -> <Self as Iterator>::DistanceType {
             num::NumCast::from(
@@ -716,24 +729,24 @@ mod test {
     }
 
     // This iterator is copyable.
-    impl<T> ForwardIterator for SliceIterator<T> where SliceIterator<T> : Iterator + Regular {}
+    impl<'a, T> ForwardIterator for SliceIterator<'a, T> where SliceIterator<'a, T> : Iterator + Regular {}
 
     // This iterator provides efficient add and sub operators.
-    impl<T> IndexedIterator for SliceIterator<T> where SliceIterator<T> : ForwardIterator {}
+    impl<'a, T> IndexedIterator for SliceIterator<'a, T> where SliceIterator<'a, T> : ForwardIterator {}
 
     // This iterator is bidirectional.
-    impl<T> BidirectionalIterator for SliceIterator<T> where SliceIterator<T> : ForwardIterator {
-        fn decrement(&mut self) {
-            unsafe {self.ptr = self.ptr.offset(-1);}
+    impl<'a, T> BidirectionalIterator for SliceIterator<'a, T> where SliceIterator<'a, T> : ForwardIterator {
+        fn alter_predecessor(&mut self) {
+            unsafe {self.ptr = self.ptr.offset(-1)}
         }
-        fn sub(self, n : Self::DistanceType) -> Self {
+        fn alter_sub(&mut self, n : Self::DistanceType) {
             let m : isize = num::NumCast::from(n).unwrap();
-            unsafe {SliceIterator{ptr : self.ptr.offset(-m)}}
+            unsafe {self.ptr = self.ptr.offset(-m)}
         }
     }
 
-    impl<T> RandomAccessIterator for SliceIterator<T>
-    where SliceIterator<T> : IndexedIterator + BidirectionalIterator {
+    impl<'a, T> RandomAccessIterator for SliceIterator<'a, T>
+    where SliceIterator<'a, T> : IndexedIterator + BidirectionalIterator {
         type DifferenceType = isize;
         fn less_than(&self, y : &Self) -> bool {
             (self.ptr as usize) < (y.ptr as usize)
@@ -821,7 +834,7 @@ mod test {
     }
 
     fn test_find_mismatch<I>(f0 : I, l0 : &I, f1 : I, l1 : &I)
-    where I : Readable + Iterator {
+    where I : Readable + Iterator, I : Debug, I::ValueType : Debug {
         let (i,j) = find_mismatch(f0, l0, f1, l1, |a, b| a == b);
         assert!(*i.source() != *j.source());
     }
@@ -933,6 +946,7 @@ mod test {
         test_find_backward_if(&f, l.clone(), 0, 2, 5);
     }
 
+    /*   
     #[test]
     fn test_reverse() {
         let mut v = [0, 1, 2, 3];
@@ -945,5 +959,6 @@ mod test {
         let b : bool = lexicographical_equal(f, &l, g, &m);
         assert!(b);
     }
+    */
 }
 
