@@ -602,9 +602,11 @@ pub mod elements {
         }
     }
 
-    pub fn weight<C>(mut c : C) -> C::WeightType where C : BidirectionalBifurcateCoordinate {
+    pub fn weight<C>(mut c : C) -> C::WeightType 
+    where C : BidirectionalBifurcateCoordinate {
+        // Precondition : tree(c)
         if c.empty() {
-            return C::WeightType::zero()
+            return C::WeightType::zero();
         }
         let root = c.clone();
         let mut v = Visit::Pre;
@@ -620,8 +622,26 @@ pub mod elements {
         }
     }
 
-
-
+    pub fn height<C>(mut c : C) -> C::WeightType
+    where C : BidirectionalBifurcateCoordinate {
+        // Precondition : tree(c)
+        if c.empty() {
+            return C::WeightType::zero();
+        }
+        let root = c.clone();
+        let mut v = Visit::Pre;
+        let mut m = C::WeightType::one(); // Invariant: m is height of current pre-visit.
+        let mut n = C::WeightType::one(); // Invarient: n is max of height of pre=visits so far.
+        loop {
+            m = (m - C::WeightType::one())
+                + num::NumCast::from(traverse_step(&mut v, &mut c)).unwrap()
+                + C::WeightType::one();
+            n = max(&n, &m).clone();
+            if c == root && v == Visit::Post {
+                return n;
+            }
+        }
+    }
 
     //-----------------------------------------------------------------------------
     // 7.4 Isomorphism, Equivalence and Ordering
