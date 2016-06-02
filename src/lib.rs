@@ -643,6 +643,24 @@ pub mod elements {
         }
     }
 
+    pub fn traverse<C, P>(mut c : C, mut p : P) -> P
+    where C : BidirectionalBifurcateCoordinate, P : FnMut(&Visit, &C) {
+        // Precondition : tree(c)
+        if c.empty() {
+            return p;
+        }
+        let root = c.clone();
+        let mut v = Visit::Pre;
+        p(&v, &c);
+        loop {
+            traverse_step(&mut v, &mut c);
+            p(&v, &c);
+            if c == root && v == Visit::Post {
+                return p;
+            }
+        }
+    }
+
     //-----------------------------------------------------------------------------
     // 7.4 Isomorphism, Equivalence and Ordering
 
