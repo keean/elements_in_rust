@@ -588,7 +588,7 @@ pub mod elements {
         // Precondition : tree(c)
         if x.empty() {
             return false;
-        }
+        } 
         let root = x.clone();
         let mut v = Visit::Pre;
         loop {
@@ -597,11 +597,31 @@ pub mod elements {
             }
             traverse_step(&mut v, &mut x);
             if x != root && v != Visit::Post {
-                break;
+                return false;
             }
         }
-        return false;
     }
+
+    pub fn weight<C>(mut c : C) -> C::WeightType where C : BidirectionalBifurcateCoordinate {
+        if c.empty() {
+            return C::WeightType::zero()
+        }
+        let root = c.clone();
+        let mut v = Visit::Pre;
+        let mut n = C::WeightType::one();
+        loop {
+            traverse_step(&mut v, &mut c);
+            if v == Visit::Pre {
+                n = n.successor();
+            }
+            if c == root && v == Visit::Post {
+                return n;
+            }
+        }
+    }
+
+
+
 
     //-----------------------------------------------------------------------------
     // 7.4 Isomorphism, Equivalence and Ordering
