@@ -664,6 +664,54 @@ pub mod elements {
     //-----------------------------------------------------------------------------
     // 7.4 Isomorphism, Equivalence and Ordering
 
+    pub fn bifurcate_isomorphic_nonempty<C0, C1>(c0 : C0, c1 : C1) -> bool
+    where C0 : BifurcateCoordinate, C1 : BifurcateCoordinate {
+        // Precondition : tree(c0) && tree(c1) && !empty(c0) && !empty(c1)
+        if c0.has_left_successor() {
+            if c1.has_left_successor() {
+                if !bifurcate_isomorphic_nonempty(c0.clone().left_successor(), c1.clone().left_successor()) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } else if c1.has_left_successor() {
+            return false;
+        }
+        if c0.has_right_successor() {
+            if c1.has_right_successor() {
+                if !bifurcate_isomorphic_nonempty(c0.right_successor(), c1.right_successor()) {
+                    return false;
+                } 
+            } else {
+                return false;
+            }
+        } else if c1.has_right_successor() {
+            return false;
+        }
+        return true;
+    }
+
+    pub fn bifurcate_isomorphic<C0, C1>(mut c0 : C0, mut c1 : C1) -> bool
+    where C0 : BidirectionalBifurcateCoordinate, C1 : BidirectionalBifurcateCoordinate {
+        // Precondition : tree(c0) && tree(c1)
+        if c0.empty() {
+            return c1.empty();
+        }
+        if c1.empty() {
+            return false;
+        }
+        let root0 = c0.clone();
+        let mut v0 = Visit::Pre;
+        let mut v1 = Visit::Pre;
+        loop {
+            traverse_step(&mut v0, &mut c0);
+            traverse_step(&mut v1, &mut c1);
+            if v0 != v1 {return false;}
+            if c0 == root0 && v0 == Visit::Post {return true;}
+        }
+    }
+
     pub fn lexicographical_equivalent<I0, I1, R, V>(f0 : I0, l0 : &I0, f1 : I1, l1 : &I1, r : R) -> bool
     where I0 : Readable<ValueType = V> + Iterator, I1 : Readable<ValueType = V> + Iterator,
     R : FnMut(&V, &V) -> bool, V : Regular {
