@@ -508,7 +508,7 @@ pub mod elements {
         max(l, r).successor()
     }
 
-    #[derive(PartialEq)]
+    #[derive(PartialEq, PartialOrd)]
     pub enum Visit {Pre, In, Post}
 
     pub fn traverse_nonempty<C, P>(c : C, mut p : P) -> P
@@ -585,7 +585,7 @@ pub mod elements {
 
     pub fn reachable<C>(mut x : C, y : C) -> bool
     where C : BidirectionalBifurcateCoordinate {
-        // Precondition : tree(c)
+        // Precondition: tree(c)
         if x.empty() {
             return false;
         } 
@@ -604,7 +604,7 @@ pub mod elements {
 
     pub fn weight<C>(mut c : C) -> C::WeightType 
     where C : BidirectionalBifurcateCoordinate {
-        // Precondition : tree(c)
+        // Precondition: tree(c)
         if c.empty() {
             return C::WeightType::zero();
         }
@@ -624,7 +624,7 @@ pub mod elements {
 
     pub fn height<C>(mut c : C) -> C::WeightType
     where C : BidirectionalBifurcateCoordinate {
-        // Precondition : tree(c)
+        // Precondition: tree(c)
         if c.empty() {
             return C::WeightType::zero();
         }
@@ -645,7 +645,7 @@ pub mod elements {
 
     pub fn traverse<C, P>(mut c : C, mut p : P) -> P
     where C : BidirectionalBifurcateCoordinate, P : FnMut(&Visit, &C) {
-        // Precondition : tree(c)
+        // Precondition: tree(c)
         if c.empty() {
             return p;
         }
@@ -666,7 +666,7 @@ pub mod elements {
 
     pub fn bifurcate_isomorphic_nonempty<C0, C1>(c0 : C0, c1 : C1) -> bool
     where C0 : BifurcateCoordinate, C1 : BifurcateCoordinate {
-        // Precondition : tree(c0) && tree(c1) && !empty(c0) && !empty(c1)
+        // Precondition: tree(c0) && tree(c1) && !empty(c0) && !empty(c1)
         if c0.has_left_successor() {
             if c1.has_left_successor() {
                 if !bifurcate_isomorphic_nonempty(c0.clone().left_successor(), c1.clone().left_successor()) {
@@ -694,7 +694,7 @@ pub mod elements {
 
     pub fn bifurcate_isomorphic<C0, C1>(mut c0 : C0, mut c1 : C1) -> bool
     where C0 : BidirectionalBifurcateCoordinate, C1 : BidirectionalBifurcateCoordinate {
-        // Precondition : tree(c0) && tree(c1)
+        // Precondition: tree(c0) && tree(c1)
         if c0.empty() {
             return c1.empty();
         }
@@ -715,6 +715,9 @@ pub mod elements {
     pub fn lexicographical_equivalent<I0, I1, R, V>(f0 : I0, l0 : &I0, f1 : I1, l1 : &I1, r : R) -> bool
     where I0 : Readable<ValueType = V> + Iterator, I1 : Readable<ValueType = V> + Iterator,
     R : FnMut(&V, &V) -> bool, V : Regular {
+        // Precondition: readable_bounded_range(f0, l0)
+        // Precondition: readable_bounded_range(f1, l1)
+        // Precondition: equivalence(r)
         let p = find_mismatch(f0, l0, f1, l1, r);
         p.0 == *l0 && p.1 == *l1
     }
@@ -726,6 +729,138 @@ pub mod elements {
     pub fn lexicographical_equal<I0, I1, V>(f0 : I0, l0 : &I0, f1 : I1, l1 : &I1) -> bool
     where I0 : Readable<ValueType = V> + Iterator, I1 : Readable<ValueType = V> + Iterator, V : Regular {
         lexicographical_equivalent(f0, l0, f1, l1, equal::<V>)
+    }
+
+    pub fn bifurcate_equivalent_nonempty<C0, C1, R>(c0 : C0, c1 : C1, r : &mut R) -> bool
+    where C0 : Readable + BifurcateCoordinate, C1 : Readable + BifurcateCoordinate,
+    R : FnMut(&C0::ValueType, &C1::ValueType) -> bool {
+        // Precondition: readable_tree(c0) && readable_tree(c1)
+        // Precondition: !empty(c0) && !empty(c1)
+        // Precondition: equivalence(r)
+        if !r(c0.source(), c1.source()) {
+            return false;
+        }
+        if c0.has_left_successor() {
+            if c1.has_left_successor() {
+                if !bifurcate_equivalent_nonempty(c0.clone().left_successor(), c1.clone().right_successor(), r) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } else if c1.has_left_successor() {
+            return false;
+        }
+        if c0.has_right_successor() {
+            if c1.has_right_successor() {
+                if !bifurcate_equivalent_nonempty(c0.left_successor(), c1.right_successor(), r) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } else if c1.has_right_successor() {
+            return false;
+        }
+        return true;
+    }
+
+    pub fn bifurcate_equivalent<C0, C1, R>(mut c0 : C0, mut c1 : C1, mut r : R) -> bool
+    where C0 : Readable + BidirectionalBifurcateCoordinate, C1 : Readable + BidirectionalBifurcateCoordinate,
+    R : FnMut(&C0::ValueType, &C1::ValueType) -> bool {
+        // Precondition: readable_tree(c0) && readable_tree(c1)
+        // Precondition: equivalence(r)
+        if c0.empty() {
+            return c1.empty()
+        }
+        if c1.empty() {
+            return false;
+        }
+        let root0 = c0.clone();
+        let mut v0 = Visit::Pre;
+        let mut v1 = Visit::Pre;
+        loop {
+            if v0 == Visit::Pre && !r(c0.source(), c1.source()) {
+                return false;
+            }
+            traverse_step(&mut v0, &mut c0);
+            traverse_step(&mut v1, &mut c1);
+            if v0 != v1 {
+                return false;
+            }
+            if c0 == root0 && v0 == Visit::Post {
+                return true;
+            }
+        }
+    }
+
+    pub fn lexicographical_compare<I0, I1, R>(mut f0 : I0, l0 : &I0, mut f1 : I1, l1 : &I1, mut r : R) -> bool
+    where I0 : Readable + Iterator, I1 : Readable<ValueType = I0::ValueType> + Iterator,
+    R : FnMut(&I0::ValueType, &I0::ValueType) -> bool {
+        // Precondition: readable_bounded_range(f0, l0)
+        // Precondition: readable_bounded_range(f1, l1)
+        // Precondition: weak_ordering(r)
+        loop {
+            if f1 == *l1 {
+                return false;
+            }
+            if f0 == *l0 {
+                return true;
+            }
+            if r(f0.source(), f1.source()) {
+                return true;
+            }
+            if r(f1.source(), f0.source()) {
+                return false;
+            }
+            f0.successor_assign();
+            f1.successor_assign();
+        }
+    }
+
+    pub fn less<T>(x : &T, y : &T) -> bool where T : PartialOrd {
+        x < y
+    }
+
+    pub fn lexicographical_less<I0, I1>(f0 : I0, l0 : &I0, f1 : I1, l1 : &I1) -> bool
+    where I0 : Readable + Iterator, I1 : Readable<ValueType = I0::ValueType> + Iterator,
+    I0::ValueType : PartialOrd {
+        lexicographical_compare(f0, l0, f1, l1, less::<I0::ValueType>)
+    }
+
+    pub fn bifurcate_compare<C0, C1, R>(mut c0 : C0, mut c1 : C1, mut r : R) -> bool
+    where C0 : Readable + BidirectionalBifurcateCoordinate,
+    C1 : Readable<ValueType = C0::ValueType> + BidirectionalBifurcateCoordinate,
+    R : FnMut(&C0::ValueType, &C1::ValueType) -> bool {
+        // Precondition: readable_tree(c0) && readable_tree(c1)
+        // Precondition: weak_ordering(r)
+        if c1.empty() {
+            return false;
+        }
+        if c0.empty() {
+            return true;
+        }
+        let root0 = c0.clone();
+        let mut v0 = Visit::Pre;
+        let mut v1 = Visit::Pre;
+        loop {
+            if v0 == Visit::Pre {
+                if r(c0.source(), c1.source()) {
+                    return true;
+                }
+                if r(c1.source(), c0.source()) {
+                    return false;
+                }
+            }
+            traverse_step(&mut v0, &mut c0);
+            traverse_step(&mut v1, &mut c1);
+            if v0 != v1 {
+                return v0 > v1;
+            }
+            if c0 == root0 && v0 == Visit::Post {
+                return false;
+            }
+        }
     }
 
     //-----------------------------------------------------------------------------
