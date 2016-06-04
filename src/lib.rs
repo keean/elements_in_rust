@@ -863,6 +863,9 @@ pub mod elements {
         }
     }
 
+    //=============================================================================
+    // 8.1 Linked Iterators
+   
     //-----------------------------------------------------------------------------
     // 9.4 Swapping Ranges
 
@@ -958,21 +961,25 @@ mod test {
         }
     }
 
-    //impl<T> Writable for SliceIterator<T> where T : Regular {
-    //     fn sink(&self) -> &mut T {
-    //        let v : &mut T;
-    //        unsafe {v = &mut *((*self).ptr);}
-    //       v
-    //   ;}
-    //}
+    /*
+    impl<'a, T> Writable for SliceIterator<'a, T> where T : Regular {
+        fn sink(&self) -> &mut T {
+            let v : &mut T;
+            unsafe {v = &mut *((*self).ptr as *mut T);}
+            v
+        }
+    }
+    */
 
-    //impl<T> Mutable for SliceIterator<T> where T : Regular {
-    //    fn deref(&self) -> &mut T {
-    //        let v : &mut T; 
-    //        unsafe {v = &mut *((*self).ptr);}
-    //        v
-    //    }
-    //}
+    /*
+    impl<'a, T> Mutable for SliceIterator<'a, T> where T : Regular {
+        fn deref(&self) -> &mut T {
+            let v : &mut T; 
+            unsafe {v = &mut *((*self).ptr as *mut T);}
+            v
+        }
+    }
+    */
 
     impl<'a, T> Iterator for SliceIterator<'a, T> where SliceIterator<'a, T> : PartialEq, T : Regular {
         type DistanceType = usize;
@@ -1208,18 +1215,17 @@ mod test {
         test_find_backward_if(&f, l.clone(), 0, 2, 5);
     }
 
-    /*   
+    /*
     #[test]
     fn test_reverse() {
-        let mut v = [0, 1, 2, 3];
-        let mut w = [3, 2, 1, 0];
+        let v = [1, 2, 3, 4];
         let f = v.begin();
-        let g = w.begin();
         let l = v.end();
-        let m = w.end();
         reverse_bidirectional(f.clone(), l.clone());
-        let b : bool = lexicographical_equal(f, &l, g, &m);
-        assert!(b);
+        let w = [4, 3, 2, 1];
+        let g = w.begin();
+        let m = w.end();
+        assert!(lexicographical_equal(f, &l, g, &m));
     }
     */
 }
