@@ -865,6 +865,13 @@ pub mod elements {
 
     //=============================================================================
     // 8.1 Linked Iterators
+
+    pub trait ForwardLinker {
+        type IteratorType : ForwardIterator;
+        extern "rust-call" fn call_mut(&mut self, Self::IteratorType, Self::IteratorType);
+    }
+
+    
    
     //-----------------------------------------------------------------------------
     // 9.4 Swapping Ranges
@@ -905,18 +912,12 @@ mod test {
     use std::mem;
 
     //-----------------------------------------------------------------------------
-    // Define Slice Iterator
+    // Define Immutable Slice Iterator
 
     trait Iterable<'a> {
         type IteratorType : Iterator;
         fn begin(&'a self) -> Self::IteratorType;
         fn end(&'a self) -> Self::IteratorType;
-    }
-
-    trait IterableMut<'a> {
-        type IteratorTypeMut : Iterator;
-        fn begin_mut(&'a mut self) -> Self::IteratorTypeMut;
-        fn end_mut(&'a mut self) -> Self::IteratorTypeMut;
     }
 
 
@@ -961,26 +962,6 @@ mod test {
         }
     }
 
-    /*
-    impl<'a, T> Writable for SliceIterator<'a, T> where T : Regular {
-        fn sink(&self) -> &mut T {
-            let v : &mut T;
-            unsafe {v = &mut *((*self).ptr as *mut T);}
-            v
-        }
-    }
-    */
-
-    /*
-    impl<'a, T> Mutable for SliceIterator<'a, T> where T : Regular {
-        fn deref(&self) -> &mut T {
-            let v : &mut T; 
-            unsafe {v = &mut *((*self).ptr as *mut T);}
-            v
-        }
-    }
-    */
-
     impl<'a, T> Iterator for SliceIterator<'a, T> where SliceIterator<'a, T> : PartialEq, T : Regular {
         type DistanceType = usize;
         fn successor_assign(&mut self) {
@@ -1016,6 +997,118 @@ mod test {
 
     impl<'a, T> RandomAccessIterator for SliceIterator<'a, T>
     where SliceIterator<'a, T> : IndexedIterator + BidirectionalIterator {
+        type DifferenceType = isize;
+        fn less_than(&self, y : &Self) -> bool {
+            (self.ptr as usize) < (y.ptr as usize)
+        }
+    }
+
+    //-----------------------------------------------------------------------------
+    // Define Mutable Slice Iterator
+
+    trait IterableMut<'a> {
+        type IteratorTypeMut : Iterator;
+        fn begin_mut(&'a mut self) -> Self::IteratorTypeMut;
+        fn end_mut(&'a mut self) -> Self::IteratorTypeMut;
+    }
+
+
+    #[derive(Clone, PartialEq, Debug)]
+    struct SliceIteratorMut<'a, T> where T : 'a {
+        ptr : *mut T,
+        phantom : PhantomData<&'a ()>
+    } 
+
+    impl<'a, T> IterableMut<'a> for [T] where T : PartialEq + Clone + Debug + 'a {
+        type IteratorTypeMut = SliceIteratorMut<'a, T>;
+        fn begin_mut(&'a mut self) -> Self::IteratorTypeMut {
+            SliceIteratorMut::new(self.first_mut().unwrap())
+        }
+        fn end_mut(&'a mut self) -> Self::IteratorTypeMut {
+            SliceIteratorMut::new(self.last_mut().unwrap()).successor()
+        }
+    }
+
+    impl<'a, T> SliceIteratorMut<'a, T> {
+        fn new(r : &'a mut T) -> SliceIteratorMut<'a, T> {
+            SliceIteratorMut {
+                ptr : r,
+                phantom : PhantomData
+            }
+        }
+    }
+
+    impl<'a, T> Display for SliceIteratorMut<'a, T> where T : Display {
+        fn fmt(&self, f : &mut Formatter) -> Result {
+            write!(f, "{}", (self.ptr as *mut T) as usize)
+        }
+    }
+
+    impl<'a, T> Reference for SliceIteratorMut<'a, T> where T : Regular {
+        type ValueType = T;
+    }
+
+    impl<'a, T> Readable for SliceIteratorMut<'a, T> where T : Regular {
+        fn source(&self) -> &T {
+            unsafe {&*self.ptr}
+        }
+    }
+
+    impl<'a, T> Writable for SliceIteratorMut<'a, T> where T : Regular {
+        fn sink(&self) -> &mut T {
+            let v : &mut T;
+            unsafe {v = &mut *self.ptr;}
+            v
+        }
+    }
+
+    impl<'a, T> Mutable for SliceIteratorMut<'a, T> where T : Regular {
+        fn deref(&self) -> &mut T {
+            let v : &mut T; 
+            unsafe {v = &mut *self.ptr;}
+            v
+        }
+    }
+
+    impl<'a, T> Iterator for SliceIteratorMut<'a, T>
+    where SliceIteratorMut<'a, T> : PartialEq, T : Regular {
+        type DistanceType = usize;
+        fn successor_assign(&mut self) {
+            unsafe {self.ptr = self.ptr.offset(1)};
+        }
+        fn add_assign(&mut self, n : Self::DistanceType) {
+            let m : isize = num::NumCast::from(n).unwrap();
+            unsafe {self.ptr = self.ptr.offset(m)};
+        }
+        fn dif(&self, f : Self) -> <Self as Iterator>::DistanceType {
+            num::NumCast::from(
+                (self.ptr as usize - f.ptr as usize) / mem::size_of::<T>()
+            ).unwrap()
+        }
+    }
+
+    // This iterator is copyable.
+    impl<'a, T> ForwardIterator for SliceIteratorMut<'a, T>
+    where SliceIteratorMut<'a, T> : Iterator + Regular {}
+
+    // This iterator provides efficient add and sub operators.
+    impl<'a, T> IndexedIterator for SliceIteratorMut<'a, T>
+    where SliceIteratorMut<'a, T> : ForwardIterator {}
+
+    // This iterator is bidirectional.
+    impl<'a, T> BidirectionalIterator for SliceIteratorMut<'a, T>
+    where SliceIteratorMut<'a, T> : ForwardIterator {
+        fn predecessor_assign(&mut self) {
+            unsafe {self.ptr = self.ptr.offset(-1)}
+        }
+        fn sub_assign(&mut self, n : Self::DistanceType) {
+            let m : isize = num::NumCast::from(n).unwrap();
+            unsafe {self.ptr = self.ptr.offset(-m)}
+        }
+    }
+
+    impl<'a, T> RandomAccessIterator for SliceIteratorMut<'a, T>
+    where SliceIteratorMut<'a, T> : IndexedIterator + BidirectionalIterator {
         type DifferenceType = isize;
         fn less_than(&self, y : &Self) -> bool {
             (self.ptr as usize) < (y.ptr as usize)
@@ -1218,9 +1311,9 @@ mod test {
     /*
     #[test]
     fn test_reverse() {
-        let v = [1, 2, 3, 4];
-        let f = v.begin();
-        let l = v.end();
+        let mut v = [1, 2, 3, 4];
+        let f = v.begin_mut();
+        let l = v.end_mut();
         reverse_bidirectional(f.clone(), l.clone());
         let w = [4, 3, 2, 1];
         let g = w.begin();
